@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NewImg** - 百万级手绘素材库管理系统（DAM），面向独立创作者的数字资产管理工具。
 
-**当前状态**: 早期规划阶段，已完成 Supabase 本地环境搭建
+**当前状态**: V1 MVP 已完成，可运行的首页原型
 
 - 数据规模：100万张 512x512 素描风格手绘素材
 - 核心功能：基于 PostgreSQL GIN 索引的多维分面搜索、虚拟滚动瀑布流
@@ -66,14 +66,59 @@ imgweb/
 │   ├── index1.html                    # 首页原型
 │   └── 2.html
 │
-├── src/                               # 💻 源代码（待创建）
+├── src/                               # 💻 Next.js 源代码
+│   ├── app/                           # App Router 页面
+│   │   ├── page.tsx                   # 首页
+│   │   └── api/assets/route.ts        # 资产查询 API
+│   ├── components/                    # React 组件
+│   │   ├── Sidebar.tsx                # 左侧一级导航
+│   │   ├── TopBar.tsx                 # 顶部筛选栏
+│   │   ├── ShelfSection.tsx           # 货架行组件
+│   │   ├── AssetCard.tsx              # 图片卡片
+│   │   └── MoodboardDock.tsx          # 悬浮灵感板
+│   ├── config/                        # 配置文件
+│   │   └── categories.ts              # 分类配置（可扩展）
+│   └── lib/                           # 工具库
+│       └── supabase.ts                # Supabase 客户端
 │
-├── supabase/                          # 🗄️ Supabase配置（待创建）
+├── supabase/                          # 🗄️ Supabase 配置
+│   └── migrations/                    # 数据库迁移
+│       ├── 001_create_assets_table.sql
+│       └── 002_seed_test_data.sql
 │
 └── CLAUDE.md                          # 本文件
 ```
 
 ## 当前可用命令
+
+### Next.js 开发
+
+```bash
+# 进入源码目录
+cd src
+
+# 安装依赖
+pnpm install
+
+# 启动开发服务器
+pnpm dev
+# 访问 http://localhost:3000
+
+# 构建生产版本
+pnpm build
+```
+
+### 数据库初始化
+
+```bash
+# 1. 启动 Supabase
+npx supabase start
+
+# 2. 在 Supabase Studio 中执行 SQL
+# 打开 http://127.0.0.1:54323
+# 执行 supabase/migrations/001_create_assets_table.sql
+# 执行 supabase/migrations/002_seed_test_data.sql
+```
 
 ### Supabase 本地开发环境
 

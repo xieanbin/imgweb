@@ -25,6 +25,42 @@
 | **Mailpit** | http://127.0.0.1:54324 | 本地邮件测试服务 |
 | **数据库** | postgresql://postgres:postgres@127.0.0.1:54322/postgres | PostgreSQL 数据库连接 |
 
+## 🧭 本地使用教程（Supabase CLI + Docker）
+
+### 为什么不需要额外安装 PostgreSQL？
+Supabase 的本地开发环境基于 Docker。执行 `npx supabase start` 时，CLI 会自动拉起一组容器，其中已包含完整的 PostgreSQL 实例，所以不依赖系统里单独安装的 PostgreSQL。
+
+### 本地栈包含哪些服务？
+启动后（可用 `docker ps` 查看）通常包含以下服务：
+- PostgreSQL（核心数据库）
+- Supabase Studio（Web 管理后台，默认 http://127.0.0.1:54323）
+- GoTrue（认证服务）
+- PostgREST（自动生成 API）
+- Realtime（实时订阅服务）
+- Storage（文件存储服务）
+
+### 本地启动与状态查看
+```bash
+npx supabase start
+npx supabase status
+```
+`supabase status` 会输出本地 API URL、DB URL、匿名/服务端密钥。连接数据库时优先使用这里的 DB URL。
+
+### 如何连接“内置”的 PostgreSQL？
+你可以用任何数据库工具（Navicat / DBeaver / TablePlus）连接本地 Postgres：
+- Host: 127.0.0.1
+- Port: 54322
+- User: postgres
+- Password: postgres
+- Database: postgres
+
+也可以直接使用 `supabase status` 输出的 DB URL，确保与当前运行中的容器一致。
+
+### 常见操作建议
+- 停止本地服务：`npx supabase stop`
+- 重置数据库：`npx supabase db reset`（会重建容器并重新应用 `supabase/migrations` 与 `supabase/seed.sql`）
+- 推荐流程：在 Studio 做变更 -> 生成迁移 -> 提交版本控制
+
 ### 2. API 端点
 
 - **REST API**: http://127.0.0.1:54321/rest/v1
