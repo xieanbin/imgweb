@@ -1,0 +1,11 @@
+superbase:
+  API文档: 可以查询context7
+  APIKEY: sbp_9dd85cceb66038c19051454cb843a585b5718982
+  projecturl: https://cbspfvxhrztkjkckahok.supabase.co
+  publishable apikey: sb_publishable_PqwYJPeF0gnck7ijfYYYaw_xfcd7fAJ
+  Anon key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNic3Bmdnhocnp0a2prY2thaG9rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYyNjM0MzgsImV4cCI6MjA4MTgzOTQzOH0._InIknlFaHab7R7OB0tL3tGmOZ22dOD_3_v7vaZW-5A
+
+cloudflare:
+  global key: 0961326331486a17c4846630a0ffbc206f660
+  origin ca key: v1.0-b0af0626854006c9b1127c33-872440cd4b31e0e841075138b2ad9849645e71257d4cc56eea5c28dc4629aed9ab44f72d08a70a95399e2c88bba03cc334da1bfeed0129f4ca039e5c760c64bdb18ad70b6458df0210
+  account ID: e418c4a33a51a2fa192b04e63cf58ee3

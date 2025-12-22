@@ -1,0 +1,242 @@
+这份前端详细设计文档旨在为进入编码阶段提供直接的工程蓝图。它基于我们确定的 Next.js + Supabase + Cloudflare R2 架构，并结合了你本地拥有高性能工作站进行数据预处理的前提。
+
+百万级手绘素材库 - 前端详细设计方案 (v1.0)
+1. 技术栈与开发环境 (Tech Stack)
+
+核心原则：Serverless 优先，性能至上，依赖 URL 状态。
+
+框架: Next.js 15 (App Router)
+
+语言: TypeScript
+
+样式: Tailwind CSS
+
+UI 组件库: Shadcn/ui (基于 Radix UI，高可定制)
+
+图标库: Lucide React
+
+虚拟滚动: react-virtuoso (处理百万级列表的核心)
+
+URL 状态管理: nuqs (Type-safe search params state manager，替代复杂的 Redux)
+
+数据/Auth: @supabase/ssr (服务端/客户端 Supabase 集成)
+
+图片源: Cloudflare R2 (前端直连，配置自定义域名)
+
+2. 目录结构设计 (Directory Structure)
+
+采用 Next.js App Router 的标准结构，强调功能模块化。
+
+code
+Text
+download
+content_copy
+expand_less
+src/
+├── app/
+│   ├── (main)/               # 主布局组
+│   │   ├── page.tsx          # 首页（瀑布流 + 侧边栏）
+│   │   ├── layout.tsx        # 全局布局（Navbar, Providers）
+│   │   └── @modal/           # 平行路由（用于拦截路由实现模态框）
+│   │       └── (.)asset/[id]/page.tsx  # 拦截详情页（弹窗形式）
+│   ├── asset/
+│   │   └── [id]/
+│   │       └── page.tsx      # 详情页（独立访问时的全页形式）
+│   ├── login/                # 登录页
+│   └── actions.ts            # Server Actions (点赞、加载更多)
+├── components/
+│   ├── ui/                   # Shadcn 基础组件 (Button, Card...)
+│   ├── feature/              # 业务组件
+│   │   ├── asset-grid.tsx    # 虚拟化瀑布流容器
+│   │   ├── asset-card.tsx    # 单张图片卡片
+│   │   ├── filter-sidebar.tsx# 侧边栏筛选器
+│   │   └── image-viewer.tsx  # 详情页大图查看器
+│   └── layout/               # 布局组件 (Header, Footer)
+├── lib/
+│   ├── supabase/             # Supabase 客户端/服务端初始化
+│   ├── utils.ts              # 通用工具函数 (cn, formatters)
+│   └── types.ts              # 全局类型定义
+└── hooks/                    # 自定义 Hooks
+3. 核心功能模块详细设计
+3.1 布局与响应式策略 (Layout & Responsive)
+
+整体布局: 典型的“顶部导航 + 左侧定宽筛选栏 + 右侧自适应内容区”。
+
+移动端适配:
+
+Desktop: 左侧 Sidebar 固定展示，右侧 Grid。
+
+Mobile: Sidebar 隐藏，通过顶部“筛选”按钮唤起 Sheet (抽屉) 组件。
+
+Grid 列数:
+
+利用 Tailwind 响应式断点，但在 react-virtuoso 中需要手动计算列宽或传入断点配置。
+
+3.2 筛选系统 (Faceted Search) - “URL 即真理”
+
+这是本项目的交互核心。所有的筛选状态直接映射到 URL Query Parameters。
+
+技术实现: 使用 nuqs 库。
+
+URL 示例: /?style=sketch&action=running&tags=girl,outdoor
+
+组件逻辑 (filter-sidebar.tsx):
+
+数据源: 从 Supabase 获取聚合的标签分类（Category + Tags）。
+
+交互: 使用 Shadcn 的 Accordion 组件折叠不同分类。
+
+状态同步: 点击 Checkbox -> 调用 setParams -> URL 变动 -> Next.js Server Component 重新获取数据 -> 列表更新。
+
+计数 (Count): 暂时使用估算值或缓存表（如 Plan A 所述），显示在标签旁。
+
+3.3 无限滚动瀑布流 (Virtual Infinite Scroll)
+
+这是性能优化的重中之重。
+
+技术实现: react-virtuoso 的 <Grid /> 组件。
+
+组件逻辑 (asset-grid.tsx):
+
+Props: 接收初始数据 (Initial Data) 和当前的 Search Params。
+
+加载策略:
+
+首屏: 服务端渲染 (SSR) 第一页数据 (例如前 50 条)。
+
+后续: 滚动到底部时，触发 endReached 回调。
+
+获取数据: 调用 Server Action loadMoreAssets(page, params) 获取下一页数据并追加到本地 State。
+
+占位符: 在图片加载期间，使用本地预处理生成的 blurhash 字符串渲染模糊背景，防止白屏。
+
+3.4 详情页：拦截路由 (Intercepting Routes)
+
+实现“像 Instagram 一样”的体验：在列表页点击图片，以弹窗打开；刷新页面后，变成独立详情页。
+
+技术实现: Next.js Parallel Routes (@modal) + Intercepting Routes ((.)asset/[id]).
+
+交互逻辑:
+
+用户点击 <Link href="/asset/123">。
+
+Next.js 拦截路由，不跳转页面，而是渲染 src/app/@modal/(.)asset/[id]/page.tsx。
+
+该组件是一个 Shadcn Dialog (模态框)，内容是图片详情。
+
+键盘导航: 监听 KeyDown 事件 (ArrowLeft/ArrowRight)，修改 URL ID 切换上一张/下一张。
+
+3.5 图片加载 (Image Rendering)
+
+利用 Cloudflare R2 和你本地预处理的 WebP。
+
+组件: Next.js <Image />
+
+关键配置:
+
+code
+Tsx
+download
+content_copy
+expand_less
+<Image
+  src={`https://r2.yourdomain.com/${asset.storage_key}`} // R2 自定义域名
+  alt={asset.prompt || 'Sketch asset'}
+  width={512}
+  height={512}
+  unoptimized={true} // 关键！跳过 Vercel 的收费优化，直接用 R2 的 WebP
+  placeholder="blur"
+  blurDataURL={asset.blurhash} // 本地预处理生成的 base64
+  loading="lazy"
+  className="object-cover transition-opacity duration-300"
+/>
+4. 数据层与状态管理 (Data & State)
+4.1 Supabase Client (Typesafe)
+
+利用 Supabase 的 TypeScript 生成工具，确保全链路类型安全。
+
+code
+Bash
+download
+content_copy
+expand_less
+# 开发前运行，生成数据库类型定义
+npx supabase gen types typescript --project-id "your-project-id" > src/lib/database.types.ts
+4.2 Server Actions (actions.ts)
+
+负责前端与 Supabase 的数据交互。
+
+code
+TypeScript
+download
+content_copy
+expand_less
+// 示例：获取素材列表
+export async function getAssets(searchParams: SearchParams, page: number) {
+  const supabase = createClient(); // Server Client
+  
+  let query = supabase.from('assets').select('*');
+  
+  // 处理 JSONB 标签搜索 (核心逻辑)
+  if (searchParams.tags) {
+    // 假设 tags 是数组，使用 Postgres 的 contains 操作符 @>
+    query = query.contains('tags', searchParams.tags);
+  }
+
+  const { data, error } = await query
+    .range(page * 50, (page + 1) * 50 - 1)
+    .order('created_at', { ascending: false });
+    
+  return { data, error };
+}
+5. 开发步骤规划 (Implementation Steps)
+
+为了高效落地，建议按以下顺序进行编码：
+
+阶段一：脚手架与基础 UI (Day 1-2)
+
+初始化: npx create-next-app@latest (TS, Tailwind, App Router)。
+
+安装依赖: shadcn-ui, lucide-react, nuqs, react-virtuoso, @supabase/ssr.
+
+配置 Shadcn: 初始化组件 button, card, dialog, sheet, accordion, skeleton.
+
+布局搭建: 完成 Sidebar 和 Grid 的响应式外壳（暂无数据，用 Mock 数据填充）。
+
+阶段二：数据链路打通 (Day 3-4)
+
+Supabase 配置: 在控制台建表（按 Plan A 的 Schema），并填入几条测试数据。
+
+类型生成: 运行 Supabase codegen。
+
+列表查询: 编写 Server Action 实现分页读取 assets 表。
+
+图片展示: 配置 next.config.js 允许 R2 域名，联调 <Image unoptimized>。
+
+阶段三：核心交互实现 (Day 5-7)
+
+无限滚动: 将 react-virtuoso 集成到 Grid 组件，对接 Server Action 的分页逻辑。
+
+筛选器逻辑: 使用 nuqs 将 Sidebar 的勾选状态绑定到 URL，并触发列表刷新。
+
+详情页弹窗: 实现 (.)asset/[id] 拦截路由，确保点击图片能弹出 Modal，且 URL 发生变化。
+
+阶段四：性能与细节 (Day 8+)
+
+Loading 状态: 添加 Skeleton 骨架屏。
+
+键盘导航: 在详情页 Modal 中添加左右键切换逻辑。
+
+本地数据导入: 运行你的 Python 脚本（利用 13900K+4090），处理第一批 1万张图片上传到 R2 并写入 Supabase，进行真实压力测试。
+
+6. 写给开发者的关键提示 (Tips for Coding)
+
+不要过度封装: 初期不要把组件拆得太碎，先在一个文件里把逻辑跑通。
+
+Grid 的高度: react-virtuoso 需要父容器有明确的高度。通常做法是设置父容器 h-screen 或 h-[calc(100vh-64px)]。
+
+JSONB 查询: 在写 Supabase 查询时，熟练使用 .contains('tags', ['tag1'])。如果在调试时发现查询慢，检查 Supabase 后台是否给 tags 列加了 GIN 索引。
+
+本地预处理约定: 确保你的 Python 脚本生成的 JSON 数据包含 width, height, blurhash 这三个字段，这对前端体验至关重要。
+
+这个设计方案是完全可执行的。你可以把这份文档放在一边，作为 Checklist，开始初始化项目了。
