@@ -18,7 +18,7 @@ export function TopBar({
   onSortChange,
 }: TopBarProps) {
   return (
-    <header className="h-[70px] flex items-center justify-between px-10 bg-[#121212]/95 backdrop-blur-sm sticky top-0 z-50 border-b border-[#333]">
+    <header className="h-[50px] flex items-center justify-between px-6 bg-[#121212]/95 backdrop-blur-sm sticky top-0 z-50 border-b border-[#333]">
       {/* 左侧：二级标签 */}
       <div className="flex gap-3">
         {/* 全部标签 */}
@@ -60,7 +60,7 @@ export function TopBar({
           icon="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"
           label="筛选"
           isActive={false}
-          onClick={() => {}}
+          onClick={() => { }}
         />
       </div>
     </header>
@@ -79,14 +79,14 @@ function Pill({ name, nameEn, isActive, onClick }: PillProps) {
     <button
       onClick={onClick}
       className={`
-        px-5 py-2 rounded-full text-sm transition-all duration-300 border
+        px-3 py-1 rounded-full text-xs transition-all duration-300 border
         ${isActive
           ? 'bg-[#ccff00] text-black font-bold border-transparent'
           : 'bg-[#2a2a2a] text-[#888] border-transparent hover:text-white hover:border-[#555]'
         }
       `}
     >
-      {name} {nameEn}
+      {name}
     </button>
   )
 }
@@ -103,17 +103,16 @@ function ToolButton({ icon, label, isActive, onClick }: ToolButtonProps) {
     <button
       onClick={onClick}
       className={`
-        flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm transition-all duration-300
+        flex items-center gap-1 px-1.5 py-1 rounded text-xs transition-all duration-300
         ${isActive
           ? 'text-[#ccff00]'
           : 'text-[#888] hover:text-white hover:bg-white/10'
         }
       `}
     >
-      <svg className="w-[18px] h-[18px] fill-current" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
         <path d={icon} />
       </svg>
-      {label}
     </button>
   )
 }
