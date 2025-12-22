@@ -1,0 +1,7 @@
+1.当前已经设计整体的项目框架
+2.初步完成了一个前端首页的demo
+3.完成项目结构重组（2024-12-22）
+  - docs/: 文档中心（design + progress）
+  - dev/: 本地开发环境（guides + scripts）
+  - deploy/: 远程部署资源
+  - prototypes/: UI原型
