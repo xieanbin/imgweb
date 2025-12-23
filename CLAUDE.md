@@ -86,6 +86,9 @@ imgweb/
 │       ├── 001_create_assets_table.sql
 │       └── 002_seed_test_data.sql
 │
+├── ref/                               # 🔬 研究参考目录
+│   └── (研究其他开源项目的代码，不是本项目的正常开发内容)
+
 └── CLAUDE.md                          # 本文件
 ```
 
