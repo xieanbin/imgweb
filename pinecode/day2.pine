@@ -1,0 +1,257 @@
+//@version=5
+indicator('day2', 'day2', true)
+
+// ═════════
+// 输入设置
+// ═══════════════════════════
+
+group_levels = 'Day Trading Levels'
+
+dayColor     = input.color(color.aqua, 'DO (Day Open) Color', inline = 'DO', group = group_levels)
+dayRefColor = input.color(color.orange, 'S1/S2/R1/R2 Color', inline = 'REF', group = group_levels)
+dayRefLevel1 = input.float(0.25, 'Reference Level #1', minval=0, step=0.05, group = group_levels)
+dayRefLevel2 = input.float(0.5, 'Reference Level #2', minval=0, step=0.05, group = group_levels)
+dayRefLevel3 = input.float(0.75, 'Reference Level #3', minval=0, step=0.05, group = group_levels)
+dayRefLevel4 = input.float(1.0, 'Reference Level #4', minval=0, step=0.05, group = group_levels)
+dayATRLength = input.int(14, 'ATR Length', minval=1, group = group_levels)
+dayRefLevels = input.string('Average True Range (ATR)', 'Day Reference Levels', 
+     options = ['Average True Range (ATR)', 'Previous Day Range (PH - PL)'], group = group_levels)
+
+// ═══════════════════════════
+// 辅助函数
+// ═════════════════════
+
+// 获取ATR
+f_getATR(_length, _htf) =>
+    request.security(syminfo.tickerid, _htf, ta.atr(_length))
+
+// 计算前一周期的高低点
+f_calculatePreviousRange(_htf) =>
+    var htf_h  = 0.
+    var htf_l  = 0.
+    var htf_hx = 0.
+    var htf_lx = 0.
+
+    if ta.change(time(_htf))
+        htf_hx := htf_h
+        htf_h  := high
+        htf_lx := htf_l
+        htf_l  := low
+    else
+        htf_h := math.max(high, htf_h)
+        htf_l := math.min(low, htf_l)
+
+    [htf_hx, htf_lx]
+
+// ═════════════════
+// 变量声明
+// ═══════════════════════
+
+dayChange = timeframe.change('D')
+
+var float dayOpen_val = na
+var float s1_val = na
+var float s2_val = na
+var float s3_val = na
+var float s4_val = na
+var float r1_val = na
+var float r2_val = na
+var float r3_val = na
+var float r4_val = na
+
+// 用于存储线条的数组
+var line_array = array.new<line>()
+
+// ═════════════
+// 核心计算逻辑
+// ═════════════════════════
+
+// 获取ATR和前一天的高低点
+// 当时间周期为D/W/M时，直接使用ta.atr(21)；否则使用f_getATR函数
+atrRange = not timeframe.isintraday ? ta.atr(dayATRLength) : f_getATR(dayATRLength, 'D')
+[prevHigh, prevLow] = f_calculatePreviousRange('D')
+
+// 在每个新交易日开始时计算所有水平位
+if dayChange and timeframe.isintraday
+    O0 = hlcc4
+    dayOpen_val := O0
+    
+    // 根据用户选择确定使用ATR还是前一天的价格区间
+    rangee = dayRefLevels == 'Average True Range (ATR)' ? atrRange : (prevHigh - prevLow)
+    
+    // 计算所有支撑位和阻力位
+    r1_val := O0 + rangee * dayRefLevel1
+    s1_val := O0 - rangee * dayRefLevel1
+    
+    r2_val := O0 + rangee * dayRefLevel2
+    s2_val := O0 - rangee * dayRefLevel2
+    
+    r3_val := O0 + rangee * dayRefLevel3
+    s3_val := O0 - rangee * dayRefLevel3
+    
+    r4_val := O0 + rangee * dayRefLevel4
+    s4_val := O0 - rangee * dayRefLevel4
+
+// ═════════════
+// 绘图（使用plot保留历史痕迹，使用line延长到当天结束时间）
+// ═══════════
+
+// 使用三元表达式来控制plot是否显示（满足v5语法要求）
+plot(timeframe.isintraday ? dayOpen_val : na, 
+     title = 'DO - Day Open', 
+     color = dayColor, 
+     linewidth = 2)
+
+plot(timeframe.isintraday ? r1_val : na, 
+     title = 'R1 - Resistance Level 1', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+plot(timeframe.isintraday ? s1_val : na, 
+     title = 'S1 - Support Level 1', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+plot(timeframe.isintraday ? r2_val : na, 
+     title = 'R2 - Resistance Level 2', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+plot(timeframe.isintraday ? s2_val : na, 
+     title = 'S2 - Support Level 2', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+plot(timeframe.isintraday ? r3_val : na, 
+     title = 'R3 - Resistance Level 3', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+plot(timeframe.isintraday ? s3_val : na, 
+     title = 'S3 - Support Level 3', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+plot(timeframe.isintraday ? r4_val : na, 
+     title = 'R4 - Resistance Level 4', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+plot(timeframe.isintraday ? s4_val : na, 
+     title = 'S4 - Support Level 4', 
+     color = dayRefColor, 
+     linewidth = 1)
+
+// 删除旧线条
+if dayChange and timeframe.isintraday
+    if array.size(line_array) > 0
+        for i = 0 to array.size(line_array) - 1
+            line.delete(array.get(line_array, i))
+    array.clear(line_array)
+
+// 在最后的bar上绘制延长线到当天结束
+if barstate.islast and timeframe.isintraday
+    // 获取当天结束时间
+    day_end_time = time_close('D')
+    current_time = time
+
+    // 创建延长线
+    if not na(dayOpen_val)
+        line_day_open = line.new(x1 = current_time, y1 = dayOpen_val, x2 = day_end_time, y2 = dayOpen_val, color = dayColor, width = 2, xloc = xloc.bar_time)
+        array.push(line_array, line_day_open)
+    
+    if not na(r1_val)
+        line_r1 = line.new(x1 = current_time, y1 = r1_val, x2 = day_end_time, y2 = r1_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_r1)
+    
+    if not na(s1_val)
+        line_s1 = line.new(x1 = current_time, y1 = s1_val, x2 = day_end_time, y2 = s1_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_s1)
+    
+    if not na(r2_val)
+        line_r2 = line.new(x1 = current_time, y1 = r2_val, x2 = day_end_time, y2 = r2_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_r2)
+    
+    if not na(s2_val)
+        line_s2 = line.new(x1 = current_time, y1 = s2_val, x2 = day_end_time, y2 = s2_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_s2)
+    
+    if not na(r3_val)
+        line_r3 = line.new(x1 = current_time, y1 = r3_val, x2 = day_end_time, y2 = r3_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_r3)
+    
+    if not na(s3_val)
+        line_s3 = line.new(x1 = current_time, y1 = s3_val, x2 = day_end_time, y2 = s3_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_s3)
+    
+    if not na(r4_val)
+        line_r4 = line.new(x1 = current_time, y1 = r4_val, x2 = day_end_time, y2 = r4_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_r4)
+    
+    if not na(s4_val)
+        line_s4 = line.new(x1 = current_time, y1 = s4_val, x2 = day_end_time, y2 = s4_val, color = dayRefColor, width = 1, xloc = xloc.bar_time)
+        array.push(line_array, line_s4)
+
+//         //@version=5
+// indicator("vwap", overlay=true)
+
+lookbackPeriod = input.int(50, title="回溯周期", minval=10, maxval=500)
+
+devUp1 = input.float(1.28, title="Stdev above (1)")
+devDn1 = input.float(1.28, title="Stdev below (1)")
+
+devUp2 = input.float(2.01, title="Stdev above (2)")
+devDn2 = input.float(2.01, title="Stdev below (2)")
+
+devUp3 = input.float(2.51, title="Stdev above (3)")
+devDn3 = input.float(2.51, title="Stdev below (3)")
+
+devUp4 = input.float(3.09, title="Stdev above (4)")
+devDn4 = input.float(3.09, title="Stdev below (4)")
+
+showDv2 = input.bool(true, title="Show second group of bands?")
+showDv3 = input.bool(true, title="Show third group of bands?")
+showDv4 = input.bool(true, title="Show fourth group of bands?")
+
+showPrevVWAP = input.bool(false, title="Show previous VWAP close")
+showVWAP = input.bool(true, title="Show VWAP close")
+
+// 更可靠的交易日检测 - 修复15分钟周期起始时间问题
+// 方法1: 使用固定时间检测 (推荐用于股票)
+// newSession = hour == 0 and minute == 0
+
+// 方法2: 使用用户可配置的开始时间
+sessionStartHour = input.int(0, "交易日开始小时", minval=0, maxval=23)
+sessionStartMinute = input.int(0, "交易日开始分钟", minval=0, maxval=59)
+newSession = hour == sessionStartHour and minute == sessionStartMinute
+
+// 方法3: 保留原有逻辑但增加时区补偿 (可选)
+// start = request.security(syminfo.tickerid, "D", time)
+// newSession = ta.change(start) ? 1 : 0
+
+var float vwapsum = na
+var float volumesum = na
+var float v2sum = na
+var float prevwap = na
+
+vwapsum := newSession ? hlc3*volume : vwapsum[1]+hlc3*volume
+volumesum := newSession ? volume : volumesum[1]+volume
+v2sum := newSession ? volume*hlc3*hlc3 : v2sum[1]+volume*hlc3*hlc3
+myvwap = vwapsum/volumesum
+dev = math.sqrt(math.max(v2sum/volumesum - myvwap*myvwap, 0))
+
+plot(showVWAP ? myvwap : na, title="VWAP", color=color.blue,linewidth = 2)
+plot(showVWAP ? myvwap + devUp1 * dev : na, title="VWAP Upper", color=color.green)
+plot(showVWAP ? myvwap - devDn1 * dev : na, title="VWAP Lower", color=color.green)
+
+plot(showDv2 ? myvwap + devUp2 * dev : na, title="VWAP Upper (2)", color=color.purple)
+plot(showDv2 ? myvwap - devDn2 * dev : na, title="VWAP Lower (2)", color=color.purple)
+
+plot(showDv3 ? myvwap + devUp3 * dev : na, title="VWAP Upper (3)", color=color.orange)
+plot(showDv3 ? myvwap - devDn3 * dev : na, title="VWAP Lower (3)", color=color.orange)
+
+plot(showDv4 ? myvwap + devUp4 * dev : na, title="VWAP Upper (4)", color=color.red)
+plot(showDv4 ? myvwap - devDn4 * dev : na, title="VWAP Lower (4)", color=color.red)
+
+prevwap := newSession ? myvwap[1] : prevwap[1]
+plot(showPrevVWAP ? prevwap : na, style=plot.style_circles, color=close > prevwap ? color.green : color.red)

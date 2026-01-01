@@ -18,10 +18,10 @@
 
 在漫画素材网站的场景中，“自动化”不仅仅是生成文本，而是系统自主完成“理解意图”、“拆解任务”、“执行检索”、“呈现结果”的闭环。
 
-| 架构阶段 | 交互模式 | 漫画素材场景应用 | 局限性 |
-| :---- | :---- | :---- | :---- |
-| **传统Web** | 菜单导航/关键词搜索 | 用户手动筛选标签（如“校园”、“雨天”），浏览列表。 | 效率低，依赖用户对标签系统的熟悉度。 |
-| **Chatbot** | 文本问答 | 用户：“给我写个故事。” AI：“好的，故事如下...” | 仅停留在文本层面，素材查找仍需人工分离操作。 |
+| 架构阶段           | 交互模式                 | 漫画素材场景应用                                                                                              | 局限性                                                 |
+| :----------------- | :----------------------- | :------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------- |
+| **传统Web**  | 菜单导航/关键词搜索      | 用户手动筛选标签（如“校园”、“雨天”），浏览列表。                                                          | 效率低，依赖用户对标签系统的熟悉度。                   |
+| **Chatbot**  | 文本问答                 | 用户：“给我写个故事。” AI：“好的，故事如下...”                                                            | 仅停留在文本层面，素材查找仍需人工分离操作。           |
 | **AI Agent** | **Chat-to-Action** | 用户：“写个雨天分手的校园故事。” AI自动生成脚本，并**同时**调用数据库接口，展示匹配的背景图和角色图。 | **实现了业务流的自动化闭环，大幅降低创作门槛。** |
 
 这种架构的核心在于\*\*Tool Calling（工具调用）\*\*机制。开源社区已经证明，通过让LLM输出特定的结构化数据（如JSON），可以触发后端函数执行，从而连接“生成能力”与“业务数据” 1。
@@ -30,8 +30,8 @@
 
 调研发现，构建此类系统的开源技术栈已趋于成熟，主要分为三个层级：
 
-1. **智能层（Intelligence Layer）：** 提供推理与指令遵循能力。主流方案是通过**OpenRouter**聚合API，或直接对接**Claude SDK**。Claude 3.5 Sonnet因其卓越的代码理解和工具调用能力，成为此类复杂逻辑首选模型 3。  
-2. **编排层（Orchestration Layer）：** 负责管理对话状态、流式传输和工具回调。**Vercel AI SDK**是目前Next.js生态下的标准选择，它提供了streamText和streamUI等原语，完美支持流式组件渲染；而**LangChain/LangGraph**则在复杂的后端逻辑编排上占据优势 5。  
+1. **智能层（Intelligence Layer）：** 提供推理与指令遵循能力。主流方案是通过**OpenRouter**聚合API，或直接对接**Claude SDK**。Claude 3.5 Sonnet因其卓越的代码理解和工具调用能力，成为此类复杂逻辑首选模型 3。
+2. **编排层（Orchestration Layer）：** 负责管理对话状态、流式传输和工具回调。**Vercel AI SDK**是目前Next.js生态下的标准选择，它提供了streamText和streamUI等原语，完美支持流式组件渲染；而**LangChain/LangGraph**则在复杂的后端逻辑编排上占据优势 5。
 3. **数据层（Data Layer）：** 负责存储与混合检索。对于拥有标签的素材库，单纯的向量搜索（Vector Search）精确度不足，必须结合元数据过滤（Metadata Filtering）。**PostgreSQL**配合**pgvector**插件，或**Supabase**的AI套件，是实现\*\*Hybrid Search（混合检索）\*\*的主流开源方案 7。
 
 ## ---
@@ -46,7 +46,7 @@
 
 调研显示，直接依赖单一模型供应商（如OpenAI）存在成本和灵活性风险。开源项目普遍采用\*\*Provider Abstraction（供应商抽象）\*\*模式。
 
-* **OpenRouter的作用：** 作为一个统一的API网关，OpenRouter允许开发者通过一套标准接口访问数百种模型。这对于开发者至关重要，因为可以在开发阶段使用昂贵的**Claude 3.5 Sonnet**进行Prompt调试，而在生产环境的非关键环节切换至**Llama 3**等低成本模型 3。  
+* **OpenRouter的作用：** 作为一个统一的API网关，OpenRouter允许开发者通过一套标准接口访问数百种模型。这对于开发者至关重要，因为可以在开发阶段使用昂贵的**Claude 3.5 Sonnet**进行Prompt调试，而在生产环境的非关键环节切换至**Llama 3**等低成本模型 3。
 * **Claude 3.5 Sonnet的优势：** 在处理“工具调用”和“结构化输出”时，Claude 3.5 Sonnet表现出了极高的指令遵循率（Instruction Following）。在素材检索场景中，模型必须严格遵守标签规范（例如只能输出数据库中存在的标签），Claude在此类任务中的表现优于许多同类模型 4。
 
 ### **2.2 提示工程（Prompt Engineering）与思维链（CoT）**
@@ -71,9 +71,9 @@ Vercel AI SDK 的核心函数 streamText 支持\*\*多步往返（Multi-Step Rou
 
 **工作流程解析：**
 
-1. **用户输入：** “男主角在雨中奔跑。”  
-2. **第一轮推理（Turn 1）：** 模型接收输入，判断需要生成一段脚本，并需要调用检索工具。模型返回一个“工具调用请求”（Tool Call Request），而不是文本。  
-3. **自动执行（Auto-Execution）：** SDK在后端自动拦截这个请求，执行对应的TypeScript函数（即查询数据库的逻辑）。  
+1. **用户输入：** “男主角在雨中奔跑。”
+2. **第一轮推理（Turn 1）：** 模型接收输入，判断需要生成一段脚本，并需要调用检索工具。模型返回一个“工具调用请求”（Tool Call Request），而不是文本。
+3. **自动执行（Auto-Execution）：** SDK在后端自动拦截这个请求，执行对应的TypeScript函数（即查询数据库的逻辑）。
 4. **第二轮推理（Turn 2）：** SDK将数据库返回的图片URL和元数据回传给模型。模型结合脚本内容和图片信息，生成最终响应流向前端。
 
 通过设置 maxSteps 参数（例如设置为5），开发者允许模型在一次用户交互中进行多次“思考-执行-再思考”的循环，从而处理极其复杂的任务逻辑，而无需用户干预 13。
@@ -86,20 +86,20 @@ Vercel AI SDK 的核心函数 streamText 支持\*\*多步往返（Multi-Step Rou
 
 TypeScript
 
-import { z } from 'zod';  
+import { z } from 'zod';
 import { tool } from 'ai';
 
-export const searchMangaAssets \= tool({  
-  description: '根据剧情描述查找漫画背景图和角色立绘',  
-  parameters: z.object({  
-    keywords: z.array(z.string()).describe('从剧情中提取的3-5个视觉关键词，如"教室", "夕阳"'),  
-    emotion: z.enum(\['happy', 'sad', 'angry', 'neutral'\]).describe('场景的情感基调'),  
-    assetType: z.enum(\['background', 'character'\]).describe('素材类型')  
-  }),  
-  execute: async ({ keywords, emotion, assetType }) \=\> {  
-    // 这里调用数据库检索逻辑  
-    return await db.hybridSearch(keywords, emotion, assetType);  
-  }  
+export const searchMangaAssets \= tool({
+  description: '根据剧情描述查找漫画背景图和角色立绘',
+  parameters: z.object({
+    keywords: z.array(z.string()).describe('从剧情中提取的3-5个视觉关键词，如"教室", "夕阳"'),
+    emotion: z.enum(\['happy', 'sad', 'angry', 'neutral'\]).describe('场景的情感基调'),
+    assetType: z.enum(\['background', 'character'\]).describe('素材类型')
+  }),
+  execute: async ({ keywords, emotion, assetType }) \=\> {
+    // 这里调用数据库检索逻辑
+    return await db.hybridSearch(keywords, emotion, assetType);
+  }
 });
 
 这种定义方式将非结构化的自然语言（“找点悲伤的图”）强行约束为结构化的数据库查询参数（{ emotion: 'sad' }），解决了AI不可控的问题 14。
@@ -120,17 +120,17 @@ export const searchMangaAssets \= tool({
 
 为了确保素材查找既“懂剧情”又“精准匹配”，检索逻辑通常包含两个步骤：
 
-1. **语义检索（Semantic Search）：** 将AI提取的剧情关键词（如“雨中等待”）转化为向量，在数据库中计算余弦相似度（Cosine Similarity），找出视觉风格相近的图片。  
+1. **语义检索（Semantic Search）：** 将AI提取的剧情关键词（如“雨中等待”）转化为向量，在数据库中计算余弦相似度（Cosine Similarity），找出视觉风格相近的图片。
 2. **元数据过滤（Metadata Filtering）：** 利用AI提取的硬性标签（如“Tags:”）进行SQL层面的过滤。
 
-倒数排名融合（RRF）算法：  
+倒数排名融合（RRF）算法：
 更高级的开源实现（如Weaviate或Supabase的高级查询）会使用RRF算法，将关键词搜索的排名和向量搜索的排名进行加权融合。这能确保返回的结果既符合剧情的语义氛围，又包含必须的视觉元素 19。
 
-| 检索方式 | 优势 | 劣势 | 在本场景的应用 |
-| :---- | :---- | :---- | :---- |
+| 检索方式             | 优势                           | 劣势                       | 在本场景的应用                     |
+| :------------------- | :----------------------------- | :------------------------- | :--------------------------------- |
 | **关键词检索** | 精准匹配特定标签（如“校服”） | 无法理解氛围（如“压抑”） | 用于硬性约束（如角色、场景类型）。 |
-| **向量检索** | 理解语义和氛围 | 容易产生幻觉或不相关匹配 | 用于匹配剧情的整体氛围和构图。 |
-| **混合检索** | **结合两者优点** | 实现复杂度稍高 | **最佳实践方案。** |
+| **向量检索**   | 理解语义和氛围                 | 容易产生幻觉或不相关匹配   | 用于匹配剧情的整体氛围和构图。     |
+| **混合检索**   | **结合两者优点**         | 实现复杂度稍高             | **最佳实践方案。**           |
 
 ## ---
 
@@ -142,10 +142,9 @@ export const searchMangaAssets \= tool({
 
 通过 **RSC** 技术，后端可以在AI生成数据的同时，将UI组件流式传输到前端。
 
-场景模拟：  
-当AI决定调用 searchMangaAssets 工具并获得图片列表后，它不再是输出一段文字描述“我找到了5张图”，而是直接返回一个 \<AssetGallery /\> 组件。
+场景模拟：当AI决定调用 searchMangaAssets 工具并获得图片列表后，它不再是输出一段文字描述“我找到了5张图”，而是直接返回一个 \<AssetGallery /\> 组件。
 
-* 用户端看到的界面：文字脚本正在逐字生成 \-\> 突然在脚本下方出现一个加载骨架屏 \-\> 瞬间替换为一组可横向滑动的精美图片卡片。  
+* 用户端看到的界面：文字脚本正在逐字生成 \-\> 突然在脚本下方出现一个加载骨架屏 \-\> 瞬间替换为一组可横向滑动的精美图片卡片。
 * 这一切都是在一次HTTP流式响应中完成的，无需前端编写复杂的useEffect或状态管理代码去轮询API 22。
 
 ### **5.2 乐观更新（Optimistic UI）与加载状态**
@@ -162,40 +161,40 @@ export const searchMangaAssets \= tool({
 
 代码段
 
-graph TD  
-    User\[用户输入: "生成一段雨夜侦探故事"\] \--\> Frontend\[Next.js前端 (Generative UI)\]  
-    Frontend \--\> AI\_Gateway  
-      
-    subgraph Intelligence Layer  
-        AI\_Gateway \--\>|Stream Request| OpenRouter  
-        OpenRouter \--\>|Reasoning| Claude  
-    end  
-      
-    subgraph Data Layer  
-        AI\_Gateway \--\>|Tool Execution (Search)| DB\_Interface  
-        DB\_Interface \--\>|Hybrid Search| VectorDB  
-        VectorDB \--\>|Tags \+ Embeddings| DB\_Interface  
-    end  
-      
-    Claude \--\>|Generate Script| AI\_Gateway  
-    Claude \--\>|Extract Tags| AI\_Gateway  
-      
-    DB\_Interface \--\>|Image Data| AI\_Gateway  
+graph TD
+    User\[用户输入: "生成一段雨夜侦探故事"\] \--\> Frontend\[Next.js前端 (Generative UI)\]
+    Frontend\--\> AI\_Gateway
+
+    subgraph Intelligence Layer
+    AI\_Gateway \--\>|Stream Request| OpenRouter
+    OpenRouter\--\>|Reasoning| Claude
+    end
+
+    subgraph Data Layer
+    AI\_Gateway \--\>|Tool Execution (Search)| DB\_Interface
+    DB\_Interface \--\>|Hybrid Search| VectorDB
+    VectorDB\--\>|Tags \+ Embeddings| DB\_Interface
+    end
+
+    Claude\--\>|Generate Script| AI\_Gateway
+    Claude\--\>|Extract Tags| AI\_Gateway
+
+    DB\_Interface \--\>|Image Data| AI\_Gateway
     AI\_Gateway \--\>|Stream React Component| Frontend
 
 ### **6.2 关键实施步骤**
 
-1. **数据准备（Embedding Pipeline）：**  
-   * 利用开源模型（如CLIP或BGE-M3）对现有的漫画素材库进行预处理，为每一张图片生成向量索引。  
-   * 确保所有图片已有结构化标签（Tags），并在Postgres中建立GIN索引以加速标签过滤。  
-2. **后端服务搭建（Agent Setup）：**  
-   * 使用Next.js App Router创建API路由。  
-   * 配置Vercel AI SDK，定义 generateScript 和 searchAssets 两个核心工具。  
-   * 在System Prompt中植入“脚本-素材联动”的指令逻辑。  
-3. **前端交互开发（UI Streaming）：**  
-   * 利用 useChat hook 管理对话状态。  
-   * 针对 searchAssets 工具的返回结果，设计专门的 \<GalleryComponent /\>，支持用户点击图片直接插入到编辑器或下载。  
-4. **优化与迭代（Feedback Loop）：**  
+1. **数据准备（Embedding Pipeline）：**
+   * 利用开源模型（如CLIP或BGE-M3）对现有的漫画素材库进行预处理，为每一张图片生成向量索引。
+   * 确保所有图片已有结构化标签（Tags），并在Postgres中建立GIN索引以加速标签过滤。
+2. **后端服务搭建（Agent Setup）：**
+   * 使用Next.js App Router创建API路由。
+   * 配置Vercel AI SDK，定义 generateScript 和 searchAssets 两个核心工具。
+   * 在System Prompt中植入“脚本-素材联动”的指令逻辑。
+3. **前端交互开发（UI Streaming）：**
+   * 利用 useChat hook 管理对话状态。
+   * 针对 searchAssets 工具的返回结果，设计专门的 \<GalleryComponent /\>，支持用户点击图片直接插入到编辑器或下载。
+4. **优化与迭代（Feedback Loop）：**
    * 引入用户反馈机制。如果用户没有采纳AI推荐的图片，记录该次失败的Query-Image对，用于后续微调检索算法权重。
 
 ## ---
@@ -210,9 +209,9 @@ graph TD
 
 ### **7.2 潜在挑战与应对**
 
-* **标签幻觉（Tag Hallucination）：** AI可能会创造数据库中不存在的标签（例如“赛博朋克风”vs数据库中的“科幻”）。  
-  * *解决方案：* 在Prompt中动态注入数据库中最高频的Top 100标签作为参考，或者在工具执行层增加模糊匹配（Fuzzy Matching）逻辑。  
-* **延迟问题（Latency）：** 串行执行（写完脚本再找图）太慢。  
+* **标签幻觉（Tag Hallucination）：** AI可能会创造数据库中不存在的标签（例如“赛博朋克风”vs数据库中的“科幻”）。
+  * *解决方案：* 在Prompt中动态注入数据库中最高频的Top 100标签作为参考，或者在工具执行层增加模糊匹配（Fuzzy Matching）逻辑。
+* **延迟问题（Latency）：** 串行执行（写完脚本再找图）太慢。
   * *解决方案：* 采用**并行工具调用（Parallel Tool Calling）**，让AI在生成脚本的段落间隙预加载图片，实现“边写边找”的流畅体验 11。
 
 综上所述，利用开源生态构建AI驱动的漫画素材自动化系统，本质上是一场**架构重组**。它要求开发者跳出传统的CRUD思维，转向以模型推理为核心、以工具调用为触手、以流式UI为界面的全新开发模式。这不仅能极大地提升用户创作效率，也将彻底重塑内容素材平台的竞争壁垒。
@@ -235,75 +234,67 @@ graph TD
 
 # **Objective**
 
-根据用户的自然语言描述，编写一段详细的分镜脚本。  
+根据用户的自然语言描述，编写一段详细的分镜脚本。
 同时，必须为每一个关键的分镜画面，调用 searchAssets 工具查找对应的参考素材。
 
 # **Constraints**
 
-1. **脚本风格**：专业、简洁，包含“景别”、“动作”、“对白”。  
-2. **素材检索**：  
-   * 必须从脚本中提取视觉关键词（如：雨、校服、奔跑）。  
-   * 必须推断情感基调（如：悲伤、紧张）。  
-   * **严禁**捏造不存在的抽象标签。仅使用具体的视觉名词。  
-3. **输出逻辑**：  
-   * 先生成分镜描述。  
-   * 紧接着调用工具展示图片。  
+1. **脚本风格**：专业、简洁，包含“景别”、“动作”、“对白”。
+2. **素材检索**：
+   * 必须从脚本中提取视觉关键词（如：雨、校服、奔跑）。
+   * 必须推断情感基调（如：悲伤、紧张）。
+   * **严禁**捏造不存在的抽象标签。仅使用具体的视觉名词。
+3. **输出逻辑**：
+   * 先生成分镜描述。
+   * 紧接着调用工具展示图片。
    * 保持“描述 \-\> 图片 \-\> 描述 \-\> 图片”的穿插节奏。
 
 # **Example**
 
-User: "男主在屋顶告白"  
-Assistant:  
-: "场景一：学校屋顶，黄昏。男主手扶栏杆，背影逆光..."  
-: searchAssets({ keywords: \["sunset", "rooftop", "school", "boy"\], emotion: "romantic" })  
+User: "男主在屋顶告白"
+Assistant:
+: "场景一：学校屋顶，黄昏。男主手扶栏杆，背影逆光..."
+: searchAssets({ keywords: \["sunset", "rooftop", "school", "boy"\], emotion: "romantic" })
 这种结构化的提示词利用了**Few-Shot Learning（少样本学习）**，通过提供Example让模型明确知道“在什么时候调用工具”以及“参数该长什么样” 27。
 
 ### **8.2 数据层：Supabase与pgvector的实战配置**
 
 在开源实现中，**Supabase** 是最快落地的后端选择。以下是如何在Supabase中配置混合检索的具体步骤 8：
 
-1. **启用扩展：**  
-   SQL  
-   create extension vector;
+1. **启用扩展：**SQLcreate extension vector;
+2. **创建素材表：**SQLcreate table assets (id bigserial primary key,content text, \-- 图片描述或OCR文字tags text, \-- 标签数组，例如 \['school', 'rain'\]embedding vector(1536) \-- 对应OpenAI/CLIP的向量维度);
+3. 创建混合检索函数（关键）：
+   这个SQL函数是连接AI与数据的桥梁。它接受向量和标签，返回最匹配的记录。
+   SQL
+   create or replace function hybrid\_search(
+   query\_embedding vector(1536),
+   filter\_tags text,
+   match\_threshold float,
+   match\_count int
+   )
+   returns table (
+   id bigint,
+   content text,
+   similarity float
+   )
+   language plpgsql
+   as $$
+   begin
+   return query
+   select
+   assets.id,
+   assets.content,
+   1 \- (assets.embedding \<=\> query\_embedding) as similarity
+   from assets
+   where 1 \- (assets.embedding \<=\> query\_embedding) \> match\_threshold
+   and assets.tags @\> filter\_tags \-- 数组包含操作符，实现标签过滤
+   order by similarity desc
+   limit match\_count;
+   end;
 
-2. **创建素材表：**  
-   SQL  
-   create table assets (  
-     id bigserial primary key,  
-     content text, \-- 图片描述或OCR文字  
-     tags text, \-- 标签数组，例如 \['school', 'rain'\]  
-     embedding vector(1536) \-- 对应OpenAI/CLIP的向量维度  
-   );
-
-3. 创建混合检索函数（关键）：  
-   这个SQL函数是连接AI与数据的桥梁。它接受向量和标签，返回最匹配的记录。  
-   SQL  
-   create or replace function hybrid\_search(  
-     query\_embedding vector(1536),  
-     filter\_tags text,  
-     match\_threshold float,  
-     match\_count int  
-   )  
-   returns table (  
-     id bigint,  
-     content text,  
-     similarity float  
-   )  
-   language plpgsql  
-   as $$  
-   begin  
-     return query  
-     select  
-       assets.id,  
-       assets.content,  
-       1 \- (assets.embedding \<=\> query\_embedding) as similarity  
-     from assets  
-     where 1 \- (assets.embedding \<=\> query\_embedding) \> match\_threshold  
-     and assets.tags @\> filter\_tags \-- 数组包含操作符，实现标签过滤  
-     order by similarity desc  
-     limit match\_count;  
-   end;  
-   $$;
+   $$
+   ;
+   $$
 
 ### **8.3 编排层：Vercel AI SDK的工具定义实战**
 
@@ -311,37 +302,37 @@ Assistant:
 
 TypeScript
 
-// app/api/chat/route.ts  
-import { createClient } from '@supabase/supabase-js';  
+// app/api/chat/route.ts
+import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 
-// 初始化Supabase客户端  
+// 初始化Supabase客户端
 const supabase \= createClient(process.env.SUPABASE\_URL, process.env.SUPABASE\_KEY);
 
-// 定义工具  
-const tools \= {  
-  searchAssets: tool({  
-    description: 'Find image assets based on visual tags and description.',  
-    parameters: z.object({  
-      description: z.string().describe('The visual description for semantic search'),  
-      tags: z.array(z.string()).describe('Specific tags to filter by'),  
-    }),  
-    execute: async ({ description, tags }) \=\> {  
-      // 1\. 将描述转化为向量 (使用OpenAI embedding或其他开源模型)  
-      const { embedding } \= await generateEmbedding(description);  
-        
-      // 2\. 调用数据库的混合检索函数  
-      const { data, error } \= await supabase.rpc('hybrid\_search', {  
-        query\_embedding: embedding,  
-        filter\_tags: tags,  
-        match\_threshold: 0.7,  
-        match\_count: 4  
-      });  
-        
-      if (error) throw error;  
-      return data; // 返回给AI，或者直接在前端通过Generative UI渲染  
-    },  
-  }),  
+// 定义工具
+const tools \= {
+  searchAssets: tool({
+    description: 'Find image assets based on visual tags and description.',
+    parameters: z.object({
+    description: z.string().describe('The visual description for semantic search'),
+    tags: z.array(z.string()).describe('Specific tags to filter by'),
+    }),
+    execute: async ({ description, tags })\=\> {
+    // 1\. 将描述转化为向量 (使用OpenAI embedding或其他开源模型)
+    const { embedding }\= await generateEmbedding(description);
+
+    // 2\. 调用数据库的混合检索函数
+    const { data, error }\= await supabase.rpc('hybrid\_search', {
+    query\_embedding: embedding,
+    filter\_tags: tags,
+    match\_threshold: 0.7,
+    match\_count: 4
+    });
+
+    if (error) throw error;
+    return data; // 返回给AI，或者直接在前端通过Generative UI渲染
+    },
+  }),
 };
 
 这段代码展示了如何将**自然语言理解**（生成embedding）与**结构化数据查询**（RPC调用）结合起来。这是“自动化干活”的技术底座 14。
@@ -354,21 +345,21 @@ const tools \= {
 
 ### **9.1 缓存策略 (Caching Strategy)**
 
-* **Prompt Caching（提示词缓存）：** Anthropic等提供商支持Prompt Caching。对于庞大的System Prompt（可能包含数千个标签的列表），启用缓存可以显著降低延迟和成本 30。  
+* **Prompt Caching（提示词缓存）：** Anthropic等提供商支持Prompt Caching。对于庞大的System Prompt（可能包含数千个标签的列表），启用缓存可以显著降低延迟和成本 30。
 * **工具结果缓存：** 对于相同的搜索请求（如“校园背景”），可以直接在应用层缓存数据库查询结果，无需每次都重新计算向量相似度。
 
 ### **9.2 模型路由与降级 (Model Routing & Fallback)**
 
 利用 **OpenRouter** 或 **Vercel AI Gateway**，可以配置模型路由策略：
 
-* **首选：** 使用 Claude 3.5 Sonnet 处理复杂的脚本生成任务。  
+* **首选：** 使用 Claude 3.5 Sonnet 处理复杂的脚本生成任务。
 * **降级/辅佐：** 如果只是单纯的同义词扩充（如将“悲伤”扩充为“流泪，低头，阴沉”），可以调用更便宜的 **Llama 3 8B** 或 **Gemini Flash** 模型。这种\*\*大小模型协同（Model Orchestration）\*\*是降低运营成本的关键 31。
 
 ### **9.3 延迟感知设计 (Latency-Aware Design)**
 
 由于向量检索和LLM生成都需要时间，前端体验优化至关重要：
 
-* **流式输出（Streaming）：** 确保文本在生成的瞬间就显示，而不是等待整个脚本写完。  
+* **流式输出（Streaming）：** 确保文本在生成的瞬间就显示，而不是等待整个脚本写完。
 * **骨架屏（Skeleton Screens）：** 在AI决定调用工具但数据未返回的间隙，展示动态骨架屏，暗示系统正在“思考”和“查找”，减少用户的焦虑感。
 
 ## ---
@@ -381,34 +372,34 @@ const tools \= {
 
 #### **引用的著作**
 
-1. Overview of Microsoft 365 Copilot Chat, 访问时间为 十二月 22, 2025， [https://learn.microsoft.com/en-us/copilot/overview](https://learn.microsoft.com/en-us/copilot/overview)  
-2. Copilot Studio overview \- Microsoft Learn, 访问时间为 十二月 22, 2025， [https://learn.microsoft.com/en-us/microsoft-copilot-studio/fundamentals-what-is-copilot-studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/fundamentals-what-is-copilot-studio)  
-3. Vercel AI SDK | OpenRouter | Documentation, 访问时间为 十二月 22, 2025， [https://openrouter.ai/docs/guides/community/vercel-ai-sdk](https://openrouter.ai/docs/guides/community/vercel-ai-sdk)  
-4. Claude Sonnet 3.5 (Bedrock) Always announces which tool it's going to use. \#3616 \- GitHub, 访问时间为 十二月 22, 2025， [https://github.com/vercel/ai/discussions/3616](https://github.com/vercel/ai/discussions/3616)  
-5. Building with AI SDK: A Practical Guide With Examples | by Sumant Sogikar \- Medium, 访问时间为 十二月 22, 2025， [https://medium.com/@sumant1122/building-with-ai-sdk-a-practical-guide-with-examples-df24e3c440ef](https://medium.com/@sumant1122/building-with-ai-sdk-a-practical-guide-with-examples-df24e3c440ef)  
-6. Building a Deep Research Agent with LangGraph And Exa \- Sid Bharath, 访问时间为 十二月 22, 2025， [https://www.siddharthbharath.com/build-deep-research-agent-langgraph/](https://www.siddharthbharath.com/build-deep-research-agent-langgraph/)  
-7. pgvector Hybrid Search: Benefits, Use Cases & Quick Tutorial, 访问时间为 十二月 22, 2025， [https://www.instaclustr.com/education/vector-database/pgvector-hybrid-search-benefits-use-cases-and-quick-tutorial/](https://www.instaclustr.com/education/vector-database/pgvector-hybrid-search-benefits-use-cases-and-quick-tutorial/)  
-8. Hybrid search | Supabase Docs, 访问时间为 十二月 22, 2025， [https://supabase.com/docs/guides/ai/hybrid-search](https://supabase.com/docs/guides/ai/hybrid-search)  
-9. Community Providers: OpenRouter \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/providers/community-providers/openrouter](https://ai-sdk.dev/providers/community-providers/openrouter)  
-10. What is chain of thought (CoT) prompting? \- IBM, 访问时间为 十二月 22, 2025， [https://www.ibm.com/think/topics/chain-of-thoughts](https://www.ibm.com/think/topics/chain-of-thoughts)  
-11. Multi-Step & Generative UI | Vercel Academy, 访问时间为 十二月 22, 2025， [https://vercel.com/academy/ai-sdk/multi-step-and-generative-ui](https://vercel.com/academy/ai-sdk/multi-step-and-generative-ui)  
-12. Next.js: Call Tools in Multiple Steps \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/cookbook/next/call-tools-multiple-steps](https://ai-sdk.dev/cookbook/next/call-tools-multiple-steps)  
-13. Generative User Interfaces \- AI SDK UI, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces](https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces)  
-14. How to build AI Agents with Vercel and the AI SDK, 访问时间为 十二月 22, 2025， [https://vercel.com/kb/guide/how-to-build-ai-agents-with-vercel-and-the-ai-sdk](https://vercel.com/kb/guide/how-to-build-ai-agents-with-vercel-and-the-ai-sdk)  
-15. AI SDK \- Vercel, 访问时间为 十二月 22, 2025， [https://vercel.com/docs/ai-sdk](https://vercel.com/docs/ai-sdk)  
-16. pgvector/pgvector: Open-source vector similarity search for Postgres \- GitHub, 访问时间为 十二月 22, 2025， [https://github.com/pgvector/pgvector](https://github.com/pgvector/pgvector)  
-17. Postgres as a vector Database | Implementing Hybrid search with Postgres for RAG Using Groq. | by Meeran Malik | Medium, 访问时间为 十二月 22, 2025， [https://medium.com/@meeran03/postgres-as-a-vector-database-implementing-hybrid-search-with-postgres-for-rag-using-groq-494ca3e41d57](https://medium.com/@meeran03/postgres-as-a-vector-database-implementing-hybrid-search-with-postgres-for-rag-using-groq-494ca3e41d57)  
-18. AI & Vectors | Supabase Docs, 访问时间为 十二月 22, 2025， [https://supabase.com/docs/guides/ai](https://supabase.com/docs/guides/ai)  
-19. Unlocking the Power of Hybrid Search \- A Deep Dive into Weaviate's Fusion Algorithms, 访问时间为 十二月 22, 2025， [https://weaviate.io/blog/hybrid-search-fusion-algorithms](https://weaviate.io/blog/hybrid-search-fusion-algorithms)  
-20. A Web Developers Guide to Hybrid Search \- Weaviate, 访问时间为 十二月 22, 2025， [https://weaviate.io/blog/hybrid-search-for-web-developers](https://weaviate.io/blog/hybrid-search-for-web-developers)  
-21. Introducing AI SDK 3.0 with Generative UI support \- Vercel, 访问时间为 十二月 22, 2025， [https://vercel.com/blog/ai-sdk-3-generative-ui](https://vercel.com/blog/ai-sdk-3-generative-ui)  
-22. Streaming React Components \- AI SDK RSC, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/ai-sdk-rsc/streaming-react-components](https://ai-sdk.dev/docs/ai-sdk-rsc/streaming-react-components)  
-23. AI SDK RSC: streamUI, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/reference/ai-sdk-rsc/stream-ui](https://ai-sdk.dev/docs/reference/ai-sdk-rsc/stream-ui)  
-24. Optimistic UI \- Apollo GraphQL Docs, 访问时间为 十二月 22, 2025， [https://www.apollographql.com/docs/react/v2/performance/optimistic-ui](https://www.apollographql.com/docs/react/v2/performance/optimistic-ui)  
-25. Optimistic UI: Making Apps Feel Faster (Even When They're Not) | by Alex Glushenkov, 访问时间为 十二月 22, 2025， [https://medium.com/@alexglushenkov/optimistic-ui-making-apps-feel-faster-even-when-theyre-not-ea296bc84720](https://medium.com/@alexglushenkov/optimistic-ui-making-apps-feel-faster-even-when-theyre-not-ea296bc84720)  
-26. React Server Components: Call Tools in Parallel \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/cookbook/rsc/call-tools-in-parallel](https://ai-sdk.dev/cookbook/rsc/call-tools-in-parallel)  
-27. Prompt Engineering Techniques for LLMs: A Comprehensive Guide | by Aloy Banerjee, 访问时间为 十二月 22, 2025， [https://medium.com/@aloy.banerjee30/prompt-engineering-techniques-for-llms-a-comprehensive-guide-46ca6466a41f](https://medium.com/@aloy.banerjee30/prompt-engineering-techniques-for-llms-a-comprehensive-guide-46ca6466a41f)  
-28. Prompt Engineering for Code Generation \- Leanware, 访问时间为 十二月 22, 2025， [https://www.leanware.co/insights/prompt-engineering-for-code-generation](https://www.leanware.co/insights/prompt-engineering-for-code-generation)  
-29. Supabase Hybrid Search \- Docs by LangChain, 访问时间为 十二月 22, 2025， [https://docs.langchain.com/oss/javascript/integrations/retrievers/supabase-hybrid](https://docs.langchain.com/oss/javascript/integrations/retrievers/supabase-hybrid)  
-30. Foundations: Providers and Models \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/foundations/providers-and-models](https://ai-sdk.dev/docs/foundations/providers-and-models)  
+1. Overview of Microsoft 365 Copilot Chat, 访问时间为 十二月 22, 2025， [https://learn.microsoft.com/en-us/copilot/overview](https://learn.microsoft.com/en-us/copilot/overview)
+2. Copilot Studio overview \- Microsoft Learn, 访问时间为 十二月 22, 2025， [https://learn.microsoft.com/en-us/microsoft-copilot-studio/fundamentals-what-is-copilot-studio](https://learn.microsoft.com/en-us/microsoft-copilot-studio/fundamentals-what-is-copilot-studio)
+3. Vercel AI SDK | OpenRouter | Documentation, 访问时间为 十二月 22, 2025， [https://openrouter.ai/docs/guides/community/vercel-ai-sdk](https://openrouter.ai/docs/guides/community/vercel-ai-sdk)
+4. Claude Sonnet 3.5 (Bedrock) Always announces which tool it's going to use. \#3616 \- GitHub, 访问时间为 十二月 22, 2025， [https://github.com/vercel/ai/discussions/3616](https://github.com/vercel/ai/discussions/3616)
+5. Building with AI SDK: A Practical Guide With Examples | by Sumant Sogikar \- Medium, 访问时间为 十二月 22, 2025， [https://medium.com/@sumant1122/building-with-ai-sdk-a-practical-guide-with-examples-df24e3c440ef](https://medium.com/@sumant1122/building-with-ai-sdk-a-practical-guide-with-examples-df24e3c440ef)
+6. Building a Deep Research Agent with LangGraph And Exa \- Sid Bharath, 访问时间为 十二月 22, 2025， [https://www.siddharthbharath.com/build-deep-research-agent-langgraph/](https://www.siddharthbharath.com/build-deep-research-agent-langgraph/)
+7. pgvector Hybrid Search: Benefits, Use Cases & Quick Tutorial, 访问时间为 十二月 22, 2025， [https://www.instaclustr.com/education/vector-database/pgvector-hybrid-search-benefits-use-cases-and-quick-tutorial/](https://www.instaclustr.com/education/vector-database/pgvector-hybrid-search-benefits-use-cases-and-quick-tutorial/)
+8. Hybrid search | Supabase Docs, 访问时间为 十二月 22, 2025， [https://supabase.com/docs/guides/ai/hybrid-search](https://supabase.com/docs/guides/ai/hybrid-search)
+9. Community Providers: OpenRouter \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/providers/community-providers/openrouter](https://ai-sdk.dev/providers/community-providers/openrouter)
+10. What is chain of thought (CoT) prompting? \- IBM, 访问时间为 十二月 22, 2025， [https://www.ibm.com/think/topics/chain-of-thoughts](https://www.ibm.com/think/topics/chain-of-thoughts)
+11. Multi-Step & Generative UI | Vercel Academy, 访问时间为 十二月 22, 2025， [https://vercel.com/academy/ai-sdk/multi-step-and-generative-ui](https://vercel.com/academy/ai-sdk/multi-step-and-generative-ui)
+12. Next.js: Call Tools in Multiple Steps \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/cookbook/next/call-tools-multiple-steps](https://ai-sdk.dev/cookbook/next/call-tools-multiple-steps)
+13. Generative User Interfaces \- AI SDK UI, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces](https://ai-sdk.dev/docs/ai-sdk-ui/generative-user-interfaces)
+14. How to build AI Agents with Vercel and the AI SDK, 访问时间为 十二月 22, 2025， [https://vercel.com/kb/guide/how-to-build-ai-agents-with-vercel-and-the-ai-sdk](https://vercel.com/kb/guide/how-to-build-ai-agents-with-vercel-and-the-ai-sdk)
+15. AI SDK \- Vercel, 访问时间为 十二月 22, 2025， [https://vercel.com/docs/ai-sdk](https://vercel.com/docs/ai-sdk)
+16. pgvector/pgvector: Open-source vector similarity search for Postgres \- GitHub, 访问时间为 十二月 22, 2025， [https://github.com/pgvector/pgvector](https://github.com/pgvector/pgvector)
+17. Postgres as a vector Database | Implementing Hybrid search with Postgres for RAG Using Groq. | by Meeran Malik | Medium, 访问时间为 十二月 22, 2025， [https://medium.com/@meeran03/postgres-as-a-vector-database-implementing-hybrid-search-with-postgres-for-rag-using-groq-494ca3e41d57](https://medium.com/@meeran03/postgres-as-a-vector-database-implementing-hybrid-search-with-postgres-for-rag-using-groq-494ca3e41d57)
+18. AI & Vectors | Supabase Docs, 访问时间为 十二月 22, 2025， [https://supabase.com/docs/guides/ai](https://supabase.com/docs/guides/ai)
+19. Unlocking the Power of Hybrid Search \- A Deep Dive into Weaviate's Fusion Algorithms, 访问时间为 十二月 22, 2025， [https://weaviate.io/blog/hybrid-search-fusion-algorithms](https://weaviate.io/blog/hybrid-search-fusion-algorithms)
+20. A Web Developers Guide to Hybrid Search \- Weaviate, 访问时间为 十二月 22, 2025， [https://weaviate.io/blog/hybrid-search-for-web-developers](https://weaviate.io/blog/hybrid-search-for-web-developers)
+21. Introducing AI SDK 3.0 with Generative UI support \- Vercel, 访问时间为 十二月 22, 2025， [https://vercel.com/blog/ai-sdk-3-generative-ui](https://vercel.com/blog/ai-sdk-3-generative-ui)
+22. Streaming React Components \- AI SDK RSC, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/ai-sdk-rsc/streaming-react-components](https://ai-sdk.dev/docs/ai-sdk-rsc/streaming-react-components)
+23. AI SDK RSC: streamUI, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/reference/ai-sdk-rsc/stream-ui](https://ai-sdk.dev/docs/reference/ai-sdk-rsc/stream-ui)
+24. Optimistic UI \- Apollo GraphQL Docs, 访问时间为 十二月 22, 2025， [https://www.apollographql.com/docs/react/v2/performance/optimistic-ui](https://www.apollographql.com/docs/react/v2/performance/optimistic-ui)
+25. Optimistic UI: Making Apps Feel Faster (Even When They're Not) | by Alex Glushenkov, 访问时间为 十二月 22, 2025， [https://medium.com/@alexglushenkov/optimistic-ui-making-apps-feel-faster-even-when-theyre-not-ea296bc84720](https://medium.com/@alexglushenkov/optimistic-ui-making-apps-feel-faster-even-when-theyre-not-ea296bc84720)
+26. React Server Components: Call Tools in Parallel \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/cookbook/rsc/call-tools-in-parallel](https://ai-sdk.dev/cookbook/rsc/call-tools-in-parallel)
+27. Prompt Engineering Techniques for LLMs: A Comprehensive Guide | by Aloy Banerjee, 访问时间为 十二月 22, 2025， [https://medium.com/@aloy.banerjee30/prompt-engineering-techniques-for-llms-a-comprehensive-guide-46ca6466a41f](https://medium.com/@aloy.banerjee30/prompt-engineering-techniques-for-llms-a-comprehensive-guide-46ca6466a41f)
+28. Prompt Engineering for Code Generation \- Leanware, 访问时间为 十二月 22, 2025， [https://www.leanware.co/insights/prompt-engineering-for-code-generation](https://www.leanware.co/insights/prompt-engineering-for-code-generation)
+29. Supabase Hybrid Search \- Docs by LangChain, 访问时间为 十二月 22, 2025， [https://docs.langchain.com/oss/javascript/integrations/retrievers/supabase-hybrid](https://docs.langchain.com/oss/javascript/integrations/retrievers/supabase-hybrid)
+30. Foundations: Providers and Models \- AI SDK, 访问时间为 十二月 22, 2025， [https://ai-sdk.dev/docs/foundations/providers-and-models](https://ai-sdk.dev/docs/foundations/providers-and-models)
 31. Provider Options \- Vercel, 访问时间为 十二月 22, 2025， [https://vercel.com/docs/ai-gateway/provider-options](https://vercel.com/docs/ai-gateway/provider-options)

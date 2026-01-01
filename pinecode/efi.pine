@@ -1,0 +1,112 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © loxx
+
+//@version=5
+indicator(title='EFI', shorttitle='EFI', format=format.volume, timeframe="", timeframe_gaps=true, max_bars_back = 5000)
+
+RMA(x, t) =>
+    EMA1 = x
+    EMA1 := na(EMA1[1]) ? x : (x - nz(EMA1[1])) * (1/t) + nz(EMA1[1])
+    EMA1
+
+EMA(x, t) =>
+    EMA1 = x
+    EMA1 := na(EMA1[1]) ? x : (x - nz(EMA1[1])) * (2 / (t + 1)) + nz(EMA1[1])
+    EMA1
+    
+_bpDom(len, bpw, mult) =>
+    HP = 0.0
+    BP = 0.0
+    Peak = 0.0
+    Real = 0.0
+    counter = 0.0
+    DC = 0.0
+    alpha2 = (math.cos(0.25 * bpw * 2 * math.pi / len) + math.sin(0.25 * bpw * 2 * math.pi  / len) - 1) / math.cos(0.25 * bpw * 2 * math.pi / len)
+    HP := (1 + alpha2 / 2) * (close - nz(close[1])) + (1 - alpha2) * nz(HP[1])
+    beta1 = math.cos(2 * math.pi / len)
+    gamma1 = 1 / math.cos(2 *  math.pi * bpw / len)
+    alpha1 = gamma1 - math.sqrt(gamma1 * gamma1 - 1)
+    BP := 0.5 * (1 - alpha1) * (HP - nz(HP[2])) + beta1 * (1 + alpha1) * nz(BP[1]) - alpha1 * nz(BP[2])
+    BP := bar_index == 1 or bar_index == 2  ? 0 : BP
+    Peak := 0.991 * Peak
+    Peak := math.abs(BP) > Peak ? math.abs(BP) : Peak
+    Real := Peak != 0 ?  BP / Peak : Real
+    DC := nz(DC[1])
+    DC := DC < 6 ? 6 : DC
+    counter := counter[1] + 1
+    if ta.crossover(Real, 0) or ta.crossunder(Real, 0)
+        DC := 2 * counter
+        if 2 * counter > 1.25 * nz(DC[1])
+            DC := 1.25 * DC[1]
+        if 2 * counter < 0.8 * nz(DC[1])
+            DC := 0.8 * nz(DC[1])
+        counter := 0
+    temp_out = mult * DC
+    temp_out
+
+//inputs
+
+src = input.source(close, title = "Source", group = "Basic Settings")
+calc_type = input.string("Fixed", title = "Calculation Type", options =["Fixed", "Band-pass Dominant Cycle"], group = "Basic Settings")
+
+len =   input.int(13, title = "Fixed EFI Period", group = "Fixed Settings")
+slen =  input.int(21, title='Fixed Signal Period', group = "Fixed Settings")
+atr_sm =  input.int(21, title ="Fixed ATR Smoothing Length", group = "Fixed Settings")
+
+
+bp_period = input.int(13, "Band-pass Period", minval = 1, group = "Band-pass")
+bp_width = input.float(0.20, "Band-pass Width", step = 0.1, group = "Band-pass")
+cycle_len = input.float(100, "Signal and ATR Percent of Dominant Cycle (%)", step = 1.0, group = "Band-pass")/100
+efi_reduction = input.float(75, "EFI Percent of Dominant Cycle (%) ", step = 1.0, group = "Band-pass")/100
+
+len_out_fast = int(nz(_bpDom(bp_period, bp_width, efi_reduction), 1)) < 1 ? 1 : int(nz(_bpDom(bp_period, bp_width, efi_reduction), 1))
+len_out_slow = int(nz(_bpDom(bp_period, bp_width, cycle_len), 1)) < 1 ? 1 : int(nz(_bpDom(bp_period, bp_width, cycle_len), 1))
+
+atr_mult1 = input.int(1, title = "ATR Mult Level 1", group = "ATR Multipliers")
+atr_mult2 = input.int(2, title = "ATR Mult Level 2", group = "ATR Multipliers")
+atr_mult3 = input.int(3, title = "ATR Mult Level 3", group = "ATR Multipliers")
+
+trunc_atr = input.bool(true, title = "Truncate over ATR Mult Level 4?", group = "UI Options")
+
+//core calc
+efi = EMA(ta.change(close) * volume, calc_type == "Fixed" ? len : len_out_fast)
+sig = EMA(efi, calc_type == "Fixed" ? len : len_out_slow)
+atr_ema = math.abs(efi[1] - efi)
+atr_out =  RMA(atr_ema, calc_type == "Fixed" ? len : len_out_slow) 
+
+//atr channel calc
+atr_high1 = sig + atr_out * atr_mult1
+atr_low1 = sig - atr_out * atr_mult1
+
+atr_high2= sig + atr_out * atr_mult2
+atr_low2 = sig - atr_out * atr_mult2
+
+atr_high3 = sig + atr_out * atr_mult3
+atr_low3 = sig - atr_out * atr_mult3
+
+atr_obhigh = sig + atr_out * (atr_mult3 + 1)
+atr_oblow = sig - atr_out * (atr_mult3 + 1)
+
+efi_out  = trunc_atr ? efi > atr_obhigh ? atr_high3 : efi < atr_oblow ? atr_low3 : efi : efi
+
+//plot atr channels
+plot(atr_high1, color = bar_index % 2 == 0 ? na : color.new(color.gray, 30), linewidth = 1, title = "ATR1 High")
+plot(atr_high2, color = bar_index % 4 == 0 ? na : color.new(color.gray, 30), linewidth = 1, title = "ATR2 High")
+plot(atr_high3, color = color.new(color.gray, 30), linewidth = 2, title = "ATR3 High")
+
+plot(atr_low1, color = bar_index % 2 == 0 ? na : color.new(color.gray, 30), linewidth = 1, title = "ATR1 Low")
+plot(atr_low2, color = bar_index % 4 == 0 ? na : color.new(color.gray, 30), linewidth = 1, title = "ATR2 Low")
+plot(atr_low3, color = color.new(color.gray, 30), linewidth = 2, title = "ATR3 Low")
+
+//plot main
+plot(0, color=color.gray, style = plot.style_circles, title='Zero Line', linewidth = 2)
+plot(sig, color=color.new(color.white, 0), title='Signal', linewidth = 2)
+plot(efi_out, color = #4f6cdf, title='EFI', linewidth = 2)
+
+//plot shapes
+plot(efi_out >= atr_high3 ? efi_out : na, style = plot.style_circles, linewidth = 3, color = #D2042D, title = "Over ATR4 High")
+plot(efi_out <= atr_low3 ? efi_out : na, style = plot.style_circles, linewidth = 3, color = #2DD204, title = "Over ATR4 Low")
+
+//bgcolor based on efi_out and sig relationship
+bgcolor_color = efi_out > 0 and efi_out > sig ? color.new(#2DD204, 90) : efi_out > 0 and efi_out < sig ? color.new(#2DD204, 95) : efi_out < 0 and efi_out < sig ? color.new(#D2042D, 90) : efi_out < 0 and efi_out > sig ? color.new(#D2042D, 95) : na
+bgcolor(bgcolor_color, title = "EFI Signal Background")

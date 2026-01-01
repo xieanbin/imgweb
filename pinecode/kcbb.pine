@@ -1,0 +1,126 @@
+//@version=5
+indicator("kcbb情绪", overlay=true)
+
+// 输入参数
+bb_length = input.int(20, title="布林带周期", minval=1)
+bb_mult = input.float(2.0, title="标准差倍数", minval=0.1, step=0.1)
+kc_length = input.int(20, title="KC周期", minval=1)
+kc_mult = input.float(2.0, title="KC倍数", minval=0.1, step=0.1)
+show_bands = input.bool(true, title="显示布林带")
+show_kc = input.bool(true, title="显示KC通道")
+show_fill = input.bool(true, title="显示填充区域")
+show_signals = input.bool(true, title="显示交易信号")
+show_alerts = input.bool(true, title="启用警报")
+show_bg = input.bool(true, title="显示背景颜色")
+
+// MaMA 输入参数
+source = input(close, 'Source')
+length = input.int(55, 'Moving Average Length', minval=1)
+exponential = input(true)
+mLength = input.int(34, 'Momentum Length', minval=0)
+accelFactor = input(true, 'Acceleration Factor')
+pLength = input.int(13, 'Probability Length', minval=1)
+offset = input.int(0, 'Offset', minval=-5, maxval=5)
+
+// 计算布林带
+[bb_middle, bb_upper, bb_lower] = ta.bb(close, bb_length, bb_mult)
+
+// 计算KC (Keltner Channels) 使用内置函数
+[kc_middle,kc_upper,kc_lower ] = ta.kc(close, kc_length, kc_mult)
+
+// MaMA 计算
+momentum = ta.change(source, mLength)
+acceleration = ta.change(momentum, mLength)
+probability = math.sum(ta.change(source) > 0 ? 1 : 0, pLength) / pLength
+adjustedSource = accelFactor ? source + (momentum + .5 * acceleration) * probability : source + momentum * probability
+MaMA = exponential ? ta.ema(adjustedSource, length) : ta.sma(adjustedSource, length)
+
+// 检测 MaMA 趋势变化 (基于颜色逻辑: source > MaMA)
+mamaTrendUp = source > MaMA
+mamaPrevTrendUp = source[1] > MaMA[1]
+mamaColorChangeToUp = mamaTrendUp and not mamaPrevTrendUp  // 从下跌(红色)转为上涨(绿色)
+mamaColorChangeToDown = not mamaTrendUp and mamaPrevTrendUp  // 从上涨(绿色)转为下跌(红色)
+
+// 绘制布林带
+// bb_middle_plot = plot( bb_middle , color=color.green, title="中轨", linewidth=2)
+bb_upper_plot = plot(bb_upper , color=color.red, title="bb_upper", linewidth=1)
+bb_lower_plot = plot( bb_lower, color=color.green, title="bb_lower", linewidth=1)
+
+// 绘制KC通道
+// kc_middle_plot = plot(show_kc ? kc_middle : na, color=color.blue, title="kc_middle", linewidth=1)
+kc_upper_plot = plot(show_kc ? kc_upper : na, color=color.blue, title="kc_upper", linewidth=1)
+kc_lower_plot = plot(show_kc ? kc_lower : na, color=color.blue, title="kc_lower", linewidth=1)
+
+// 填充布林带区域
+// fill_color = close > bb_middle ? color.new(color.green, 90) : color.new(color.red, 90)
+// fill(plot1=bb_upper, plot2=bb_lower, color=fill_color, transp=85)
+
+// 生成交易信号
+sell_signal= ta.crossunder(close, bb_upper)  // 价格跌破下轨
+buy_signal = ta.crossover(close, bb_lower)  // 价格突破上轨
+
+// 计算背景颜色
+bb_above_kc_upper = bb_upper > kc_upper
+bb_below_kc_lower = bb_lower < kc_lower
+bb_inside_kc = bb_upper <= kc_upper and bb_lower >= kc_lower
+plot(bb_above_kc_upper?1:0, title="bb_above_kc_upper",color = color.aqua,display = display.data_window)
+plot(bb_below_kc_lower?1:0, title="bb_below_kc_lower",color = color.yellow,display = display.data_window)
+plot(bb_inside_kc?1:0, title="bb_inside_kc",color = color.lime,display = display.data_window)
+// 计算布林带宽度
+bb_width = bb_upper - bb_lower
+bb_percent = (close - bb_lower) / (bb_upper - bb_lower) * 100
+
+
+// 计算KC宽度
+kc_width = kc_upper - kc_lower
+kc_percent = (close - kc_lower) / (kc_upper - kc_lower) * 100
+
+// 优化的背景颜色逻辑
+// 当BB宽度 > KC宽度时，说明进入波动期
+// 条件1: BB宽度 > KC宽度 且 价格 > KC中轨 -> 绿色背景（波动上涨）
+// 条件2: BB宽度 > KC宽度 且 价格 < KC中轨 -> 红色背景（波动下跌）
+// 条件3: BB宽度 <= KC宽度 -> 淡色背景（盘整状态）
+volatility_condition = bb_width > kc_width
+bullish_condition = volatility_condition and close > kc_middle
+bearish_condition = volatility_condition and close < kc_middle
+range_condition = not volatility_condition
+
+final_bg_color = bullish_condition ? color.new(color.green, 75) :
+                 bearish_condition ? color.new(color.red, 75) :
+                 na
+bgcolor(final_bg_color)
+plot(bb_width, title="bb_width",display = display.data_window)
+plot(kc_width, title="kc_width",display = display.data_window)
+
+// // 绘制信号
+// plotshape( buy_signal, title="买入信号", location=location.belowbar,
+//           style=shape.triangleup, size=size.normal, color=color.green, textcolor=color.white, text="买")
+// plotshape(sell_signal, title="卖出信号", location=location.abovebar,
+//           style=shape.triangledown, size=size.normal, color=color.red, textcolor=color.white, text="卖")
+
+plot(kc_middle, title="kc_middle",display = display.data_window)
+plot(bb_middle, title="bb_middle",display = display.data_window)
+
+// MaMA 绘图
+p0 = plot(MaMA, 'Momentum adjusted Moving Average', color=source > MaMA ? #006400 : #910000, linewidth=2, offset=offset)
+
+// MaMA 趋势标记 (位置在上方，便于区分)
+plotshape(
+     series = mamaColorChangeToUp ? high : na,
+     title = "MaMA转为上涨",
+     style = shape.arrowdown,
+     location = location.abovebar,
+     color = color.new(color.lime, 0),
+     textcolor = color.white,
+     size = size.normal
+     )
+
+plotshape(
+     series = mamaColorChangeToDown ? low : na,
+     title = "MaMA转为下跌",
+     style = shape.arrowdown,
+     location = location.abovebar,
+     color = color.new(color.red, 0),
+     textcolor = color.white,
+     size = size.normal
+     )

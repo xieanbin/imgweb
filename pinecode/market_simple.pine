@@ -1,0 +1,188 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// Simplified Volume Profile - POC, VAH, VAL only
+
+//@version=5
+indicator("Simple Volume Profile (POC/VAH/VAL)", overlay=true, max_boxes_count=500, max_bars_back=1000)
+
+//==========================
+// Inputs
+//==========================
+sessionType = input.string('Daily', 'Session Type', options=['Daily','Weekly', 'Monthly'])
+resolution = input.int(30, 'Resolution', minval=5, maxval=100)
+VAwid = input.int(70, 'Value Area %', minval=1, maxval=100)
+
+pocCol = input.color(color.red, 'POC Color')
+vahCol = input.color(color.aqua, 'VAH Color')
+valCol = input.color(color.aqua, 'VAL Color')
+lineWid = input.int(1, 'Line Width', minval=1, maxval=5)
+
+//==========================
+// Variables
+//==========================
+var int zoneStart = 0
+var activeZone = false
+int lookback = bar_index - zoneStart
+
+var vpVol = array.new_float(resolution, 0)
+var zoneBounds = array.new_float(resolution, 0)
+
+var float[] ltfHigh = array.new_float(0)
+var float[] ltfLow = array.new_float(0)
+var float[] ltfClose = array.new_float(0)
+var float[] ltfOpen = array.new_float(0)
+var float[] ltfVolume = array.new_float(0)
+
+// Get lower timeframe data
+[dO, dC, dH, dL, dV] = request.security_lower_tf(syminfo.tickerid, '', [open, close, high, low, volume])
+
+//==========================
+// Functions
+//==========================
+profHigh = ta.highest(high, lookback + 1)[1]
+profLow = ta.lowest(low, lookback + 1)[1]
+
+resetProfile() =>
+    array.fill(vpVol, 0)
+    array.clear(ltfOpen)
+    array.clear(ltfHigh)
+    array.clear(ltfLow)
+    array.clear(ltfClose)
+    array.clear(ltfVolume)
+
+get_vol(y11, y12, y21, y22, height, vol) =>
+    nz(math.max(math.min(math.max(y11, y12), math.max(y21, y22)) - math.max(math.min(y11, y12), math.min(y21, y22)), 0) * vol / height)
+
+profileAdd(o, h, l, c, v, gap) =>
+    for i = 0 to resolution - 1
+        zoneTop = array.get(zoneBounds, i)
+        zoneBot = zoneTop - gap
+        body_top = math.max(c, o)
+        body_bot = math.min(c, o)
+
+        topwick = h - body_top
+        bottomwick = body_bot - l
+        body = body_top - body_bot
+
+        bodyvol = body * v / (2 * topwick + 2 * bottomwick + body)
+        topwickvol = 2 * topwick * v / (2 * topwick + 2 * bottomwick + body)
+        bottomwickvol = 2 * bottomwick * v / (2 * topwick + 2 * bottomwick + body)
+
+        zoneVol = get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol) +
+                  get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 +
+                  get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+        array.set(vpVol, i, array.get(vpVol, i) + zoneVol)
+
+calcSession() =>
+    array.fill(vpVol, 0)
+    if bar_index > lookback
+        gap = (profHigh - profLow) / resolution
+        for i = 0 to resolution - 1
+            array.set(zoneBounds, i, profHigh - gap * i)
+
+        if array.size(ltfOpen) > 0
+            for j = 0 to array.size(ltfOpen) - 1
+                profileAdd(array.get(ltfOpen, j), array.get(ltfHigh, j), array.get(ltfLow, j), array.get(ltfClose, j), array.get(ltfVolume, j), gap)
+
+pocLevel() =>
+    float maxVol = 0
+    int levelInd = 0
+    for i = 0 to resolution - 1
+        if array.get(vpVol, i) > maxVol
+            maxVol := array.get(vpVol, i)
+            levelInd := i
+
+    float outLevel = na
+    if levelInd < resolution - 1
+        outLevel := array.get(zoneBounds, levelInd) - (array.get(zoneBounds, levelInd) - array.get(zoneBounds, levelInd + 1)) / 2
+    outLevel
+
+valueLevels(poc) =>
+    float gap = (profHigh - profLow) / resolution
+    float volSum = array.sum(vpVol)
+    float volCnt = 0
+    float vah = profHigh
+    float val = profLow
+
+    int pocInd = 0
+    for i = 0 to resolution - 2
+        if array.get(zoneBounds, i) >= poc and array.get(zoneBounds, i + 1) < poc
+            pocInd := i
+
+    volCnt += array.get(vpVol, pocInd)
+    for i = 1 to resolution
+        if pocInd + i < resolution
+            volCnt += array.get(vpVol, pocInd + i)
+            if volCnt >= volSum * (VAwid / 100)
+                break
+            else
+                val := array.get(zoneBounds, pocInd + i) - gap
+        if pocInd - i >= 0
+            volCnt += array.get(vpVol, pocInd - i)
+            if volCnt >= volSum * (VAwid / 100)
+                break
+            else
+                vah := array.get(zoneBounds, pocInd - i)
+    [val, vah]
+
+updateIntra(o, h, l, c, v) =>
+    if array.size(o) > 0
+        for i = 0 to array.size(o) - 1
+            array.push(ltfOpen, array.get(o, i))
+            array.push(ltfHigh, array.get(h, i))
+            array.push(ltfLow, array.get(l, i))
+            array.push(ltfClose, array.get(c, i))
+            array.push(ltfVolume, array.get(v, i))
+
+//==========================
+// Session Detection
+//==========================
+newDaily = dayofweek != dayofweek[1]
+newWeekly = weekofyear != weekofyear[1]
+newMonthly = month != month[1]
+
+newSession = switch sessionType
+    'Daily' => newDaily
+    'Weekly' => newWeekly
+    'Monthly' => newMonthly
+    => newDaily
+
+//==========================
+// Main Logic
+//==========================
+var line pocLine = na
+var line vahLine = na
+var line valLine = na
+
+// Calculate and draw at session end
+if newSession
+    calcSession()
+    // Draw historical lines
+    if bar_index > lookback and array.sum(vpVol) > 0
+        poc = pocLevel()
+        [val, vah] = valueLevels(poc)
+        leftBar = bar_index - lookback
+        rightBar = bar_index - 1
+        line.new(leftBar, poc, rightBar, poc, color=pocCol, width=lineWid)
+        line.new(leftBar, vah, rightBar, vah, color=vahCol, width=lineWid)
+        line.new(leftBar, val, rightBar, val, color=valCol, width=lineWid)
+    resetProfile()
+    zoneStart := bar_index
+    activeZone := true
+
+// Update intrabar data
+updateIntra(dO, dH, dL, dC, dV)
+
+// Draw current session on last bar
+if barstate.islast and activeZone
+    calcSession()
+    if bar_index > lookback and array.sum(vpVol) > 0
+        line.delete(pocLine)
+        line.delete(vahLine)
+        line.delete(valLine)
+        poc = pocLevel()
+        [val, vah] = valueLevels(poc)
+        leftBar = bar_index - lookback
+        rightBar = bar_index
+        pocLine := line.new(leftBar, poc, rightBar, poc, color=pocCol, width=lineWid)
+        vahLine := line.new(leftBar, vah, rightBar, vah, color=vahCol, width=lineWid)
+        valLine := line.new(leftBar, val, rightBar, val, color=valCol, width=lineWid)

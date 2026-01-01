@@ -1,0 +1,317 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Leviathan
+// Refactored to only show POC, VAH, VAL
+
+//@version=5
+indicator("poc", overlay=true, max_boxes_count=500, max_lines_count=500, max_bars_back=1000)
+
+//==========================
+// Inputs
+//==========================
+group_set = 'Settings'
+group_app = 'Appearance'
+
+sessionType = input.string('Daily', 'Session Type', options=['Tokyo','London','New York','Daily','Weekly', 'Monthly', 'Quarterly', 'Yearly'], group=group_set)
+resolution  = input.int(24, 'Row Resolution', minval=5, tooltip='Higher values = more precision but more calculation load', group=group_set)
+VAwid       = input.int(70, 'Value Area Volume %', minval=1, maxval=100, group=group_set)
+volType     = input.string('Volume', 'Data Type', options=['Volume', 'Open Interest'], group=group_set)
+smoothVol   = input.bool(false, 'Smooth Volume Data', group=group_set)
+dataTf      = '' // Auto lower timeframe
+
+// Colors & Widths
+pocCol = input.color(color.red, 'POC Color', group=group_app)
+pocWid = input.int(1, 'POC Width', group=group_app)
+vahCol = input.color(color.green, 'VAH Color', group=group_app)
+vahWid = input.int(1, 'VAH Width', group=group_app)
+valCol = input.color(color.green, 'VAL Color', group=group_app)
+valWid = input.int(1, 'VAL Width', group=group_app)
+
+//==========================
+// Variables & Arrays
+//========================== 
+var int zoneStart = 0
+int lookback = bar_index - zoneStart
+var activeZone = false
+
+// Profile Arrays
+var vpGreen = array.new_float(resolution, 0) 
+var vpRed = array.new_float(resolution, 0)
+var zoneBounds = array.new_float(resolution, 0)
+
+// Lower Timeframe Data Arrays
+var float[] ltfOpen   = array.new_float(0)
+var float[] ltfClose  = array.new_float(0)
+var float[] ltfHigh   = array.new_float(0)
+var float[] ltfLow    = array.new_float(0)
+var float[] ltfVolume = array.new_float(0)
+
+//==========================
+// Data Fetching
+//==========================
+// Open Interest Logic
+string userSymbol = syminfo.prefix + ":" + syminfo.ticker
+string openInterestTicker = str.format("{0}_OI", userSymbol)
+string timeframe_oi = syminfo.type == "futures" and timeframe.isintraday ? "1D" : timeframe.period
+deltaOi = request.security(openInterestTicker, timeframe_oi, close-close[1], ignore_invalid_symbol = true)
+
+vol() =>
+    out = smoothVol ? ta.ema(volume, 5) : volume
+    if volType == 'Open Interest'
+        out := deltaOi
+    out
+
+// Intrbar Data
+[dO, dC, dH, dL, dV] = request.security_lower_tf(syminfo.tickerid, dataTf, [open, close, high, low, vol()])
+
+// Range High/Low for the current session
+profHigh = ta.highest(high, lookback + 1)[1]
+profLow  = ta.lowest(low, lookback + 1)[1]
+
+//==========================
+// Functions
+//==========================
+
+// Clear arrays for new session
+resetProfile(enable) =>
+    if enable
+        array.fill(vpGreen, 0)
+        array.fill(vpRed, 0)
+        array.clear(ltfOpen)
+        array.clear(ltfHigh)
+        array.clear(ltfLow)
+        array.clear(ltfClose)
+        array.clear(ltfVolume)
+
+// Helper to calculate volume overlap
+get_vol(y11, y12, y21, y22, height, vol) =>
+    nz(math.max(math.min(math.max(y11, y12), math.max(y21, y22)) - math.max(math.min(y11, y12), math.min(y21, y22)), 0) * vol / height)
+
+// Add volume to profile buckets
+profileAdd(o, h, l, c, v, g) =>
+    for i = 0 to array.size(vpGreen) - 1
+        zoneTop = array.get(zoneBounds, i)
+        zoneBot = zoneTop - g
+
+        body_top = math.max(c, o)
+        body_bot = math.min(c, o)
+        itsgreen = c >= o
+
+        topwick = h - body_top
+        bottomwick = body_bot - l
+        body = body_top - body_bot
+        
+        // Prevent division by zero
+        totalRange = (2 * topwick + 2 * bottomwick + body)
+        if totalRange == 0
+            continue
+
+        bodyvol = body * v / totalRange
+        topwickvol = 2 * topwick * v / totalRange
+        bottomwickvol = 2 * bottomwick * v / totalRange
+
+        // Add to buckets (Logic preserved from original)
+        if volType == 'Volume'
+            v_green = (itsgreen ? get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol) : 0) + get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 + get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+            v_red   = (itsgreen ? 0 : get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol)) + get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 + get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+            array.set(vpGreen, i, array.get(vpGreen, i) + v_green)
+            array.set(vpRed, i, array.get(vpRed, i) + v_red)
+        else if volType == 'Open Interest'
+            if v > 0    
+                array.set(vpGreen, i, array.get(vpGreen, i) + get_vol(zoneBot, zoneTop, body_bot, body_top, body, v))
+            if v < 0
+                array.set(vpRed, i, array.get(vpRed, i) + get_vol(zoneBot, zoneTop, body_bot, body_top, body, -v))
+
+// Update array data
+updateIntra(o, h, l, c, v) =>
+    if array.size(o) > 0
+        for i = 0 to array.size(o) - 1
+            array.push(ltfOpen, array.get(o, i))
+            array.push(ltfHigh,array.get(h, i)) 
+            array.push(ltfLow,array.get(l, i)) 
+            array.push(ltfClose,array.get(c, i)) 
+            array.push(ltfVolume,array.get(v, i))
+
+// Calculate Profile Structure
+calcSession(update) =>
+    array.fill(vpGreen, 0)
+    array.fill(vpRed, 0)
+    if bar_index > lookback and update
+        gap = (profHigh - profLow) / resolution
+        if gap == 0 
+            gap := syminfo.mintick
+
+        // Define profile bounds
+        for i = 0 to resolution - 1
+            array.set(zoneBounds, i, profHigh - gap * i)
+
+        // Process data
+        if array.size(ltfOpen) > 0
+            for j = 0 to array.size(ltfOpen) - 1    
+                profileAdd(array.get(ltfOpen, j), array.get(ltfHigh, j), array.get(ltfLow, j), array.get(ltfClose, j), array.get(ltfVolume, j), gap)
+
+// Find POC
+pocLevel() =>
+    float maxVol = 0
+    int levelInd = 0
+    for i = 0 to array.size(vpRed) - 1
+        volSum = array.get(vpRed, i) + array.get(vpGreen, i)
+        if volSum > maxVol
+            maxVol := volSum
+            levelInd := i
+    
+    float outLevel = na
+    if levelInd < array.size(zoneBounds) - 1
+        // Center of the bucket
+        outLevel := array.get(zoneBounds, levelInd) - (array.get(zoneBounds, levelInd) - array.get(zoneBounds, levelInd+1)) / 2
+    outLevel
+
+// Find VAH and VAL
+valueLevels(poc) =>
+    float gap = (profHigh - profLow) / resolution
+    if gap == 0 
+        gap := syminfo.mintick
+
+    float volSum = array.sum(vpRed) + array.sum(vpGreen)
+    float volCnt = 0
+    
+    float vah = profHigh
+    float val = profLow
+
+    // Find POC Index
+    int pocInd = 0
+    for i = 0 to array.size(zoneBounds)-2
+        if array.get(zoneBounds, i) >= poc and array.get(zoneBounds, i + 1) < poc
+            pocInd := i
+            break
+    
+    // Expand from POC
+    volCnt += (array.get(vpRed, pocInd) + array.get(vpGreen, pocInd))
+    
+    // Loop outwards
+    for i = 1 to resolution
+        bool upValid = (pocInd - i >= 0)
+        bool dnValid = (pocInd + i < resolution)
+        
+        if not upValid and not dnValid
+            break
+
+        if dnValid
+            volCnt += (array.get(vpRed, pocInd + i) + array.get(vpGreen, pocInd + i))
+            if volCnt >= volSum * (VAwid/100)    
+                break 
+            else
+                val := array.get(zoneBounds, pocInd + i) - gap
+        
+        if upValid
+            volCnt += (array.get(vpRed, pocInd - i) + array.get(vpGreen, pocInd - i))
+            if volCnt >= volSum * (VAwid/100)    
+                break 
+            else
+                vah := array.get(zoneBounds, pocInd - i)
+
+    [val, vah]
+
+// Draw Historical (Completed) Zones
+drawHistoryZone(update) =>
+    if bar_index > lookback and update and array.sum(vpGreen) + array.sum(vpRed) > 0
+        float leftMax = bar_index[lookback]
+        
+        poc = pocLevel()
+        [val, vah] = valueLevels(poc)
+        
+        // Draw Lines
+        line.new(int(leftMax), poc, bar_index-1, poc, color=pocCol, width=pocWid)
+        line.new(int(leftMax), vah, bar_index-1, vah, color=vahCol, width=vahWid)
+        line.new(int(leftMax), val, bar_index-1, val, color=valCol, width=valWid)
+
+// Draw Current (Live) Zone
+drawLiveZone(update, delete) =>
+    var line pocLine = na
+    var line vahLine = na
+    var line valLine = na
+
+    if bar_index > lookback and update and array.sum(vpGreen) + array.sum(vpRed) > 0
+        float leftMax = bar_index[lookback]
+        
+        poc = pocLevel()
+        [val, vah] = valueLevels(poc)
+
+        // Delete old lines
+        line.delete(pocLine)
+        line.delete(vahLine)
+        line.delete(valLine)
+        
+        // Create new lines
+        pocLine := line.new(int(leftMax), poc, bar_index-1, poc, color=pocCol, width=pocWid)
+        vahLine := line.new(int(leftMax), vah, bar_index-1, vah, color=vahCol, width=vahWid)
+        valLine := line.new(int(leftMax), val, bar_index-1, val, color=valCol, width=valWid)
+
+    if delete
+        line.delete(pocLine)
+        line.delete(vahLine)
+        line.delete(valLine)
+
+//==========================
+// Session Logic
+//==========================
+newDaily = dayofweek != dayofweek[1]
+newWeekly = weekofyear != weekofyear[1]
+newMonthly = (dayofmonth != dayofmonth[1] + 1) and (dayofmonth != dayofmonth[1])
+newYearly = year != year[1]
+newQuarterly = month != month[1] and (month - 1) % 3 == 0
+
+utcHour = hour(time(timeframe.period, '0000-2400', 'GMT'), 'GMT')
+newTokyo = utcHour != utcHour[1] + 1 and utcHour != utcHour[1]
+endTokyo = utcHour >= 9 and utcHour[1] < 9
+newLondon = utcHour >= 7 and utcHour[1] < 7
+endLondon = utcHour >= 16 and utcHour[1] < 16
+newNewYork = utcHour >= 13 and utcHour[1] < 13
+endNewYork = utcHour >= 22 and utcHour[1] < 22
+
+newSession = switch sessionType
+    'Tokyo'     => newTokyo
+    'London'    => newLondon
+    'New York'  => newNewYork
+    'Daily'     => newDaily
+    'Weekly'    => newWeekly
+    'Monthly'   => newMonthly
+    'Yearly'    => newYearly
+    'Quarterly' => newQuarterly
+    => newDaily
+
+zoneEnd = switch sessionType
+    'Tokyo'     => endTokyo
+    'London'    => endLondon
+    'New York'  => endNewYork
+    'Daily'     => newDaily
+    'Weekly'    => newWeekly
+    'Monthly'   => newMonthly
+    'Yearly'    => newYearly
+    'Quarterly' => newQuarterly
+    => newDaily
+
+//==========================
+// Execution Logic
+//==========================
+
+// Calculate Profile
+// We calculate if the zone ended OR if it's the live candle
+calcSession(zoneEnd or (barstate.islast))
+
+// Draw completed zone (History)
+drawHistoryZone(zoneEnd)
+
+// Draw/Update current zone (Live)
+// We pass 'zoneEnd' to delete the live temporary lines when the session closes
+drawLiveZone(barstate.islast and not zoneEnd and activeZone, zoneEnd)
+
+// Reset logic
+resetProfile(newSession)
+updateIntra(dO, dH, dL, dC, dV)
+
+if zoneEnd 
+    activeZone := false
+
+if newSession
+    zoneStart := bar_index
+    activeZone := true

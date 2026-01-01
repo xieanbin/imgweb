@@ -1,0 +1,209 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// Refactored to fix VAH/VAL calculation logic based on standard TPO algorithm
+// © Leviathan (Modified)
+
+//@version=5
+indicator("Previous Day POC/VAH/VAL (Fixed)", overlay=true, max_lines_count=500)
+
+//==========================
+// Inputs
+//==========================
+group_set = 'Settings'
+group_app = 'Appearance'
+
+resolution  = input.int(100, 'Row Resolution', minval=10, tooltip='Higher values = more precision', group=group_set)
+VAwid       = input.int(70, 'Value Area Volume %', minval=1, maxval=100, group=group_set)
+// 默认计算周期设为5分钟，以平衡精度和加载速度
+calcTf      = input.timeframe("5", "Calculation Timeframe (Lower TF)", group=group_set)
+
+// Colors & Widths
+pocCol = input.color(color.red, 'POC Color', group=group_app)
+pocWid = input.int(2, 'POC Width', group=group_app)
+vahCol = input.color(color.green, 'VAH Color', group=group_app)
+vahWid = input.int(1, 'VAH Width', group=group_app)
+valCol = input.color(color.green, 'VAL Color', group=group_app)
+valWid = input.int(1, 'VAL Width', group=group_app)
+
+//==========================
+// Variables for Storage
+//========================== 
+// 存储全天的累积数据
+var float[] dayOpen   = array.new_float(0)
+var float[] dayHigh   = array.new_float(0)
+var float[] dayLow    = array.new_float(0)
+var float[] dayClose  = array.new_float(0)
+var float[] dayVolume = array.new_float(0)
+
+// 存储昨日计算结果 (用于画线)
+var float plotPoc = na
+var float plotVah = na
+var float plotVal = na
+
+//==========================
+// Data Fetching
+//==========================
+// 获取更小周期数据
+[ltfO, ltfH, ltfL, ltfC, ltfV] = request.security_lower_tf(syminfo.tickerid, calcTf, [open, high, low, close, volume])
+
+//==========================
+// Helper Functions
+//==========================
+
+// 计算成交量分布重叠部分 (保持不变)
+get_vol(y11, y12, y21, y22, height, vol) =>
+    nz(math.max(math.min(math.max(y11, y12), math.max(y21, y22)) - math.max(math.min(y11, y12), math.min(y21, y22)), 0) * vol / height)
+
+// 核心计算函数
+calc_levels_from_arrays() =>
+    if array.size(dayHigh) == 0
+        [float(na), float(na), float(na)]
+    else
+        // 1. 确定昨日价格范围
+        float dHigh = array.max(dayHigh)
+        float dLow  = array.min(dayLow)
+        
+        // 如果波动太小（例如停牌），避免除零错误
+        if dHigh == dLow
+            [dHigh, dHigh, dHigh]
+        else 
+            // 2. 初始化 Profile 桶
+            float gap = (dHigh - dLow) / resolution
+            if gap == 0 
+                gap := syminfo.mintick
+            
+            // 使用一个数组存储 Volume Profile
+            float[] vpVol = array.new_float(resolution, 0)
+            float[] zoneBounds = array.new_float(resolution, 0) // 存储每个桶的顶部价格
+            
+            // 定义每个桶的顶部价格 (Index 0 是最高价)
+            for i = 0 to resolution - 1
+                array.set(zoneBounds, i, dHigh - gap * i)
+                
+            // 3. 填充 Profile
+            int size = array.size(dayOpen)
+            for j = 0 to size - 1
+                float o = array.get(dayOpen, j)
+                float h = array.get(dayHigh, j)
+                float l = array.get(dayLow, j)
+                float c = array.get(dayClose, j)
+                float v = array.get(dayVolume, j)
+                
+                // 仅当成交量有效时计算
+                if not na(v) and v > 0
+                    float body_top = math.max(c, o)
+                    float body_bot = math.min(c, o)
+                    float topwick = h - body_top
+                    float bottomwick = body_bot - l
+                    float body = body_top - body_bot
+                    float totalRange = (2 * topwick + 2 * bottomwick + body)
+                    
+                    if totalRange > 0
+                        float bodyvol = body * v / totalRange
+                        float topwickvol = 2 * topwick * v / totalRange
+                        float bottomwickvol = 2 * bottomwick * v / totalRange
+                        
+                        // 遍历桶进行分配
+                        for i = 0 to resolution - 1
+                            float zoneTop = array.get(zoneBounds, i)
+                            float zoneBot = zoneTop - gap
+                            
+                            if h >= zoneBot and l <= zoneTop
+                                float addedVol = get_vol(zoneBot, zoneTop, body_bot, body_top, body, bodyvol) + 
+                                                 get_vol(zoneBot, zoneTop, body_top, h, topwick, topwickvol) / 2 + 
+                                                 get_vol(zoneBot, zoneTop, body_bot, l, bottomwick, bottomwickvol) / 2
+                                array.set(vpVol, i, array.get(vpVol, i) + addedVol)
+
+            // 4. 寻找 POC (Point of Control)
+            float maxVol = 0.0
+            int pocInd = 0
+            float totalVolume = 0.0
+            
+            for i = 0 to resolution - 1
+                float curVol = array.get(vpVol, i)
+                totalVolume += curVol
+                if curVol > maxVol
+                    maxVol := curVol
+                    pocInd := i
+            
+            // 计算 POC 价格 (取桶的中点)
+            float calcPoc = array.get(zoneBounds, pocInd) - gap / 2
+            
+            // 5. 计算 VAH / VAL (修复后的逻辑)
+            // 目标成交量 (例如 70%)
+            float targetVol = totalVolume * (VAwid / 100.0)
+            
+            // 从 POC 开始
+            float currentVolSum = maxVol
+            int upIdx = pocInd // 指向更"高"价格的索引 (index 越小价格越高)
+            int dnIdx = pocInd // 指向更"低"价格的索引 (index 越大价格越低)
+            
+            // 循环直到累积体积达到目标
+            // 逻辑：每次比较上方邻居和下方邻居，谁大加谁
+            while currentVolSum < targetVol
+                // 获取上一个桶的体积 (价格更高)
+                float upVol = (upIdx > 0) ? array.get(vpVol, upIdx - 1) : 0.0
+                // 获取下一个桶的体积 (价格更低)
+                float dnVol = (dnIdx < resolution - 1) ? array.get(vpVol, dnIdx + 1) : 0.0
+                
+                // 如果两边都没得加了 (已到达边界)，强制退出
+                if upVol == 0.0 and dnVol == 0.0
+                    break
+                
+                // 比较哪边体积大，就向哪边扩展
+                if upVol >= dnVol
+                    upIdx := upIdx - 1
+                    currentVolSum += upVol
+                else
+                    dnIdx := dnIdx + 1
+                    currentVolSum += dnVol
+            
+            // 6. 确定最终价格
+            // upIdx 是包含在 Value Area 内的最高价格桶的索引
+            // VAH = 该桶的顶部
+            float calcVah = array.get(zoneBounds, upIdx)
+            
+            // dnIdx 是包含在 Value Area 内的最低价格桶的索引
+            // VAL = 该桶的底部 (即顶部 - gap)
+            float calcVal = array.get(zoneBounds, dnIdx) - gap 
+            
+            [calcPoc, calcVah, calcVal]
+
+//==========================
+// Main Logic
+//==========================
+
+// 检测新的一天 (基于交易所时间)
+bool isNewDay = ta.change(time("D"))
+
+// 如果是新的一天，结算昨日数据
+if isNewDay
+    [nPoc, nVah, nVal] = calc_levels_from_arrays()
+    // 确保有有效数据才更新
+    if not na(nPoc) and nPoc != 0
+        plotPoc := nPoc
+        plotVah := nVah
+        plotVal := nVal
+    
+    // 清空数组，准备新一天
+    array.clear(dayOpen)
+    array.clear(dayHigh)
+    array.clear(dayLow)
+    array.clear(dayClose)
+    array.clear(dayVolume)
+
+// 数据收集 (时刻进行)
+if array.size(ltfO) > 0
+    for i = 0 to array.size(ltfO) - 1
+        array.push(dayOpen, array.get(ltfO, i))
+        array.push(dayHigh, array.get(ltfH, i))
+        array.push(dayLow, array.get(ltfL, i))
+        array.push(dayClose, array.get(ltfC, i))
+        array.push(dayVolume, array.get(ltfV, i))
+
+//==========================
+// Plotting
+//==========================
+// 使用 plot.style_linebr 处理跨日跳变
+plot(plotVah, "Prev VAH", color=vahCol, linewidth=vahWid, style=plot.style_linebr)
+plot(plotPoc, "Prev POC", color=pocCol, linewidth=pocWid, style=plot.style_linebr)
+plot(plotVal, "Prev VAL", color=valCol, linewidth=valWid, style=plot.style_linebr)

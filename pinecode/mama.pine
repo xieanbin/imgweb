@@ -1,0 +1,134 @@
+//@version=5
+// ══════════════════════════════════════════════════════════════════════════════════════════════════ //
+//# * ══════════════════════════════════════════════════════════════════════════════════════════════
+//# *
+//# * Study       : Momentum adjusted Moving Average
+//# * Author      : © dgtrd
+//# *
+//# * Revision History
+//# *  Release    : Jul 15, 2020  : Initial Release
+//# *  Update     : Aug 10, 2020  : Feedback Bands
+//# *                               - Introduces an experimental application of feedback concept common in Electronic Engineering
+//# *  Update     : Nov 24, 2020  : Backtest Framework Adaptation
+//# *  Update     : Apr 08, 2021  : Enchanced Backtest Framework
+//# *                               - long/short/stoploss conditions enchaced
+//# *                               - early warning ability added (label + alert)
+//# *
+//# * ══════════════════════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════════════════════════ //
+
+indicator('MaMA', 'MaMA', true)
+
+// -Input ======================================================================================= //
+
+source = input(close, 'Source')
+length = input.int(55, 'Moving Average Length', minval=1)
+exponential = input(true)
+mLength = input.int(34, 'Momentum Length', minval=0)
+accelFactor = input(true, 'Acceleration Factor')
+pLength = input.int(13, 'Probability Length', minval=1)
+offset = input.int(0, 'Offset', minval=-5, maxval=5)
+
+displayFB = input(false, 'Display Feedback Bands (Daily TimeFrame)')
+fbFactor = input.float(.1, 'Feedback Factor', minval=0, maxval=.2, step=.01)
+displayMA = input(false, 'Add Regular Moving Average')
+ema1 = input.int(defval=21, options = [21,34,55,100,200], title="EMA 周期")
+shema = input.bool(defval=true, title="显示EMA线")
+
+// KAMA 输入参数
+kamaLen = input.int(21, "KAMA 长度", group="KAMA设置")
+showKama = input.bool(true, "显示KAMA线", group="KAMA设置")
+showKamaColorChange = input.bool(true, "显示颜色变化标记", group="KAMA设置")
+showKamaUpTrend = input.bool(true, "显示上涨趋势标记", group="KAMA设置")
+showKamaDownTrend = input.bool(true, "显示下跌趋势标记", group="KAMA设置")
+
+// -Calculation ================================================================================= //
+
+momentum = ta.change(source, mLength)
+acceleration = ta.change(momentum, mLength)
+probability = math.sum(ta.change(source) > 0 ? 1 : 0, pLength) / pLength
+
+adjustedSource = accelFactor ? source + (momentum + .5 * acceleration) * probability : source + momentum * probability
+
+MaMA = exponential ? ta.ema(adjustedSource, length) : ta.sma(adjustedSource, length)
+MA = displayMA ? exponential ? ta.ema(source, length) : ta.sma(source, length) : na
+usedEma = ta.ema(close, ema1)
+
+// 检测 MaMA 趋势变化 (基于颜色逻辑: source > MaMA)
+mamaTrendUp = source > MaMA
+mamaPrevTrendUp = source[1] > MaMA[1]
+mamaColorChangeToUp = mamaTrendUp and not mamaPrevTrendUp  // 从下跌(红色)转为上涨(绿色)
+mamaColorChangeToDown = not mamaTrendUp and mamaPrevTrendUp  // 从上涨(绿色)转为下跌(红色)
+
+// 调试日志
+if barstate.islast
+    log.info("MaMA趋势检测 - 当前趋势向上: " + str.tostring(mamaTrendUp) +
+             ", 前一趋势向上: " + str.tostring(mamaPrevTrendUp) +
+             ", 转为上涨信号: " + str.tostring(mamaColorChangeToUp) +
+             ", 转为下跌信号: " + str.tostring(mamaColorChangeToDown))
+
+
+// KAMA 计算 (需要导入 MightyZinger/Moving_Averages/1 库)
+import MightyZinger/Moving_Averages/1 as mv
+kamaValue = mv.kama(source, kamaLen, 2, 30)
+
+// 检测 KAMA 趋势变化
+kamaTrendUp = kamaValue >= kamaValue[1]
+kamaPrevTrendUp = kamaValue[1] >= kamaValue[2]
+kamaColorChangeToUp = kamaTrendUp and not kamaPrevTrendUp  // 从下跌转为上涨
+kamaColorChangeToDown = not kamaTrendUp and kamaPrevTrendUp  // 从上涨转为下跌
+kamaColor = kamaValue >= kamaValue[1] ? color.yellow : color.purple
+
+negative = displayFB and timeframe.isdaily ? ta.ema(MaMA / math.abs(1 + fbFactor * adjustedSource / MaMA), 5) : na
+positive = displayFB and timeframe.isdaily ? ta.ema(MaMA / math.abs(1 - fbFactor * adjustedSource / MaMA), 5) : na
+
+// -Plot ======================================================================================== //
+
+p0 = plot(MaMA, 'Momentum adjusted Moving Average', color=source > MaMA ? #006400 : #910000, linewidth=2, offset=offset)
+
+
+plot(MA, 'Regular Moving Average')
+plot(shema ? usedEma : na, title="EMA", style=plot.style_line, linewidth=2, color=source > usedEma ? color.lime : color.red)
+
+// KAMA 绘图 (使用三元表达式控制显示)
+plot(showKama ? kamaValue : na, title='KAMA', linewidth=1, color=kamaColor)
+
+// MaMA 趋势标记 (位置在上方，便于区分)
+plotshape(
+     series = mamaColorChangeToUp ? high : na,
+     title = "MaMA转为上涨",
+     style = shape.arrowdown,
+     location = location.abovebar,
+     color = color.new(color.lime, 0),
+     textcolor = color.white,
+     size = size.normal
+     )
+
+plotshape(
+     series = mamaColorChangeToDown ? low : na,
+     title = "MaMA转为下跌",
+     style = shape.arrowdown,
+     location = location.abovebar,
+     color = color.new(color.red, 0),
+     textcolor = color.white,
+     size = size.normal
+     )
+
+// KAMA 趋势标记
+plotshape(
+     series = showKamaColorChange and showKamaUpTrend and kamaColorChangeToUp ? low : na,
+     title = "KAMA转为上涨",
+     style = shape.arrowup,
+     location = location.belowbar,
+     color = color.new(color.lime, 0),
+     size = size.normal
+     )
+
+plotshape(
+     series = showKamaColorChange and showKamaDownTrend and kamaColorChangeToDown ? high : na,
+     title = "KAMA转为下跌",
+     style = shape.arrowdown,
+     location = location.belowbar,
+     color = color.new(color.red, 0),
+     size = size.normal
+     )
